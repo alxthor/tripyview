@@ -584,6 +584,13 @@ def plot_hslice_reg(mesh, data, input_names, cinfo=None, box=None, proj='pc', fi
                              vmin=cinfo_plot['clevel'][0], vmax=cinfo_plot['clevel'][ -1],
                              norm = which_norm)
             
+        elif do_plot=='pcm':
+            hp=ax[ii].pcolormesh(data_x, data_y, data_plot,
+                                 shading='nearest',
+                                 cmap=cinfo_plot['cmap'],
+                                 vmin=cinfo_plot['clevel'][0], vmax=cinfo_plot['clevel'][ -1],
+                                 norm = which_norm)
+
         elif do_plot=='tcf': 
             # supress warning message when compared with nan
             with np.errstate(invalid='ignore'):
