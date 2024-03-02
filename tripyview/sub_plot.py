@@ -1783,15 +1783,15 @@ def do_add_gridlines(ax, rowidx, colidx, xticks, yticks, proj, which_proj, rowli
                             draw_labels=False, 
                             xlocs=xticks, ylocs=yticks, 
                             alpha=0.25, )
-        gl.ylabels_left   = True
-        gl.xlabels_bottom = True
+        gl.left_labels   = True
+        gl.bottom_labels = True
         
         if rowidx!=maxr-1: 
             #ax.set_xticklabels([])
-            gl.xlabels_bottom=False
+            gl.bottom_labels=False
         if colidx >0     : 
             #ax.set_yticklabels([])
-            gl.ylabels_left = False
+            gl.left_labels = False
             
     elif proj=='channel':
             
