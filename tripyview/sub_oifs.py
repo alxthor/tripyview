@@ -33,11 +33,19 @@ def get_filenames(vname, data_freq, years, prefix='atm_remapped', sep='_'):
         raise ValueError( " year can be integer, list, np.array or range(start,end)")
     return file_names, str_mtim
 
+
+
+
+
 def get_filepaths(data_path, file_names):
     assert os.path.isdir(data_path), "{} is not a directory".format(data_path)
     file_paths = [data_path + '/' + file_name for file_name in file_names]
     for file_path, file_name in zip(file_paths, file_names): assert os.path.isfile(file_path), "{} is not a file name in {}".format(file_name, data_path)
     return file_paths
+
+
+
+
 
 def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=None, height=None, heightidx=None,
               do_tarithm='mean', do_zarithm='mean', descript='', do_compute=False, do_load=True, do_persist=False,
@@ -54,7 +62,7 @@ def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=Non
     data_set = xr.open_mfdataset(file_paths, parallel=True, chunks=chunks, **kwargs)
     
     # Rename time dimension
-    data_set = data_set.rename_dims({'time_counter': 'time'})
+    data_set = data_set.rename({'time_counter': 'time'})
     
     # years are selected by the files that are open, need to select mon or day or record 
     data_set, mon, day, str_ltim = do_select_time(data_set, mon, day, record, str_ltim)
@@ -89,11 +97,26 @@ def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=Non
 
 
 
-def open_multiple_data(data_paths, data_names, vname, data_freq, years, record=None, do_load=True):
+def open_multiple_data(data_paths, data_names, vname, data_freq, years, mon=None, day=None, record=None, do_load=True, ref_path=None, do_reffig=False):
     '''for every path / experiment it opens a dataset with the variable'''
     assert len(data_paths) == len(data_names), "data_paths and data_names do not have the same length"
     data_sets = []
-    for data_path, data_name in zip(data_paths, data_names):
-        data_set = open_data(data_path, vname, data_freq, years, record=None, do_load=True, descript=data_name)
-        data_sets.append(data_set)
+    for ii, (data_path, data_name) in enumerate(zip(data_paths, data_names)):
+        data_set = open_data(data_path, vname, data_freq, years, mon=mon, day=day, record=record, do_load=True, descript=data_name)
+
+        # create reference data if given 
+        if (ii==0) and (ref_path != None and ref_path != 'None'):
+            data_set_ref = data_set
+            if do_reffig: data_sets.append(data_set_ref) 
+            continue
+            
+        #__________________________________________________________________________________________________    
+        # compute anomaly 
+        if (ref_path != None and ref_path != 'None'):
+            data_sets.append(do_anomaly(data_set, data_set_ref))  
+        # compute absolute    
+        else:
+            data_sets.append(data_set)
+        del(data_set)
+    if (ref_path != None and ref_path != 'None'): del(data_set_ref)
     return data_sets   
