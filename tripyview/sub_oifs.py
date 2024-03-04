@@ -30,7 +30,7 @@ def get_filenames(vname, data_freq, years, prefix='atm_remapped', sep='_'):
         str_mtim = 'y:{}'.format(year)
         file_names.append(prefix + sep + data_freq + sep + vname + sep + data_freq + sep + str(year) + '-' + str(year) + '.nc')
     else:
-        raise ValueError( " year can be integer, list, np.array or range(start,end)")
+        raise ValueError( " year can be integer, list, np.array or range(start,end). Got {}, namely {}".format(type(years), years))
     return file_names, str_mtim
 
 
@@ -97,12 +97,19 @@ def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=Non
 
 
 
-def open_multiple_data(data_paths, data_names, vname, data_freq, years, mon=None, day=None, record=None, do_load=True, ref_path=None, do_reffig=False):
+def open_multiple_data(data_paths, data_names, vname, data_freq, years, mon=None, day=None, record=None,
+                       height=None, heightidx=None, do_tarithm='mean', do_zarithm='mean',
+                       do_compute=False, do_load=True, do_persist=False, ref_path=None, do_reffig=False,
+                       ref_year=None, ref_mon=None, ref_day=None, ref_record=None,
+                       chunks={'time_counter': 'auto', 'lon': 'auto', 'lat': 'auto'}, **kwargs):
     '''for every path / experiment it opens a dataset with the variable'''
     assert len(data_paths) == len(data_names), "data_paths and data_names do not have the same length"
     data_sets = []
     for ii, (data_path, data_name) in enumerate(zip(data_paths, data_names)):
-        data_set = open_data(data_path, vname, data_freq, years, mon=mon, day=day, record=record, do_load=True, descript=data_name)
+        yearsi, moni, dayi, recordi = years, mon, day, record
+        if (ii==0) and (ref_path != None and ref_path != 'None'): yearsi, moni, dayi, recordi = ref_year, ref_mon, ref_day, ref_record
+        data_set = open_data(data_path, vname, data_freq, yearsi, mon=moni, day=dayi, record=recordi, height=height, heightidx=heightidx,
+                             do_tarithm=do_tarithm, do_zarithm=do_zarithm, descript=data_name, chunks=chunks, **kwargs)
 
         # create reference data if given 
         if (ii==0) and (ref_path != None and ref_path != 'None'):
