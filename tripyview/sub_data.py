@@ -824,11 +824,18 @@ def do_comp_sel_levidx(zlev, depth, depidx, ndimax):
     elif isinstance(depth,(list, np.ndarray, range)):   
         sel_levidx=[]
         for depi in depth:
-            auxidx     = np.searchsorted(zlev, depi)
-            if auxidx>ndimax and ndimax not in sel_levidx: sel_levidx.append(ndimax)    
-            if auxidx>=1 and auxidx-1 not in sel_levidx: sel_levidx.append(auxidx-1)
-            if (auxidx not in sel_levidx): sel_levidx.append(auxidx)
-            if (auxidx==0 and 1 not in sel_levidx): sel_levidx.append(auxidx+1)
+            # select indices closest to depths
+            if depidx:
+                auxidx = np.argmin(abs(zlev - depi))
+                if (auxidx not in sel_levidx): sel_levidx.append(auxidx)
+                else: print(f" > The specified depth {depi}m has already been selected and will be ignored.")
+            # select indices for interpolation
+            else:
+                auxidx     = np.searchsorted(zlev, depi)
+                if auxidx>ndimax and ndimax not in sel_levidx: sel_levidx.append(ndimax)    
+                if auxidx>=1 and auxidx-1 not in sel_levidx: sel_levidx.append(auxidx-1)
+                if (auxidx not in sel_levidx): sel_levidx.append(auxidx)
+                if (auxidx==0 and 1 not in sel_levidx): sel_levidx.append(auxidx+1)
     
     #___________________________________________________________________________
     return(sel_levidx)
