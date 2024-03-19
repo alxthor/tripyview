@@ -111,7 +111,7 @@ def open_multiple_data(data_paths, data_names, vname, data_freq, years, mon=None
         yearsi, moni, dayi, recordi = years, mon, day, record
         if (ii==0) and (ref_path != None and ref_path != 'None'): yearsi, moni, dayi, recordi = ref_year, ref_mon, ref_day, ref_record
         data_set = open_data(data_path, vname, data_freq, yearsi, mon=moni, day=dayi, record=recordi, height=height, heightidx=heightidx,
-                             do_tarithm=do_tarithm, do_zarithm=do_zarithm, do_compute=False, do_load=True, do_persist=False,
+                             do_tarithm=do_tarithm, do_zarithm=do_zarithm, do_compute=do_compute, do_load=do_load, do_persist=do_persist,
                              descript=data_name, chunks=chunks, **kwargs)
 
         # create reference data if given 
