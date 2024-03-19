@@ -79,6 +79,7 @@ def load_mesh_fesom2(
     # path of mesh location
     meshpath = os.path.normpath(meshpath)
     meshid   = os.path.basename(meshpath)
+    if meshid == 'mesh': meshid = os.path.basename(os.path.dirname(meshpath))
     
     #___________________________________________________________________________
     # build path for cach to store the pickle files, either in home directory or 
@@ -393,6 +394,7 @@ class mesh_fesom2(object):
         self.path               = os.path.normpath(meshpath)
         self.cachepath          = 'None'
         self.id                 = os.path.basename(self.path)
+        if self.id == 'mesh': self.id = os.path.basename(os.path.dirname(self.path))
         self.info_txt           = ''
         
         #_______________________________________________________________________
