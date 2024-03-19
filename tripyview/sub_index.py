@@ -440,9 +440,9 @@ def plot_index_hovm(data, boxidx=0, figsize=[12, 6],
             cont=ax[ii].contour(time, depth, data_plot,
                             levels=cinfo_plot['clevel'][idx_yes], colors='k', linewidths=[0.5],
                             norm = which_norm) #linewidths=[0.5,0.25])
-            #if do_clabel: 
-                #ax[ii].clabel(cont, cont.levels[np.where(cont.levels!=cinfo_plot['cref'])], 
-                            #inline=1, inline_spacing=1, fontsize=6, fmt='%1.1f Sv')
+            if do_clabel: 
+                ax[ii].clabel(cont, cont.levels[np.where(cont.levels!=cinfo_plot['cref'])], 
+                            inline=1, inline_spacing=1, fontsize=6, fmt=None)#'%1.1f Sv')
         
         #_______________________________________________________________________
         # fix color range
