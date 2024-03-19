@@ -49,6 +49,7 @@ def get_filepaths(data_path, file_names):
 
 def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=None, height=None, heightidx=None,
               do_tarithm='mean', do_zarithm='mean', descript='', do_compute=False, do_load=True, do_persist=False,
+              drop_vars=['time_centered_bounds', 'time_counter_bounds'],
               chunks={'time': 'auto', 'lon': 'auto', 'lat': 'auto'}, **kwargs):
     xr.set_options(keep_attrs=True)
     # Default values
@@ -60,6 +61,7 @@ def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=Non
     file_names, str_ltim = get_filenames(vname, data_freq, years)
     file_paths = get_filepaths(data_path, file_names)#[data_path + '/' + file_name for file_name in file_names]
     data_set = xr.open_mfdataset(file_paths, parallel=True, chunks=chunks, **kwargs)
+    data_set = data_set.drop_vars(drop_vars)
     
     # Rename time dimension
     data_set = data_set.rename({'time_counter': 'time'})
