@@ -70,12 +70,12 @@ def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=Non
         if isinstance(years, (list, np.ndarray, range)):
             # years = [yr_start, yr_end]
             if isinstance(years, list) and len(years)==2:
-                str_mtim = 'y:{}-{}'.format(str(years[0]), str(years[1]))                                                                                                                                          
+                str_ltim = 'y:{}-{}'.format(str(years[0]), str(years[1]))                                                                                                                                          
             # years = [year1,year2,year3....]            
             else:
-                str_mtim = 'y:{}-{}'.format(str(years[0]), str(years[-1]))
+                str_ltim = 'y:{}-{}'.format(str(years[0]), str(years[-1]))
         elif isinstance(years, int):
-            str_mtim = 'y:{}'.format(years)
+            str_ltim = 'y:{}'.format(years)
         else:    
             raise ValueError( " year can be integer, list, np.array or range(start,end). Got {}, namely {}".format(type(years), years))
     file_paths = get_filepaths(data_path, file_names)#[data_path + '/' + file_name for file_name in file_names]
