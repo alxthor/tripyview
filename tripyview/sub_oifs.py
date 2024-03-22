@@ -49,8 +49,14 @@ def get_filepaths(data_path, file_names):
 
 def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=None, height=None, heightidx=None,
               do_tarithm='mean', do_zarithm='mean', descript='', do_compute=False, do_load=True, do_persist=False,
+              file_names=None,
               drop_vars=['time_centered_bounds', 'time_counter_bounds'],
               chunks={'time': 'auto', 'lon': 'auto', 'lat': 'auto'}, **kwargs):
+    """
+    load OIFS data
+    In case file_names is not None: vname and years is just used for metadata info, data_freq is meaningless
+    """
+
     xr.set_options(keep_attrs=True)
     # Default values
     is_data = 'scalar'
@@ -58,7 +64,20 @@ def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=Non
     str_lheight, str_ltim = '', '' # string for labels    
     
     # Open data
-    file_names, str_ltim = get_filenames(vname, data_freq, years)
+    if file_names is None: file_names, str_ltim = get_filenames(vname, data_freq, years)
+    else:
+        # Do not change file_names but determine str_ltim
+        if isinstance(years, (list, np.ndarray, range)):
+            # years = [yr_start, yr_end]
+            if isinstance(years, list) and len(years)==2:
+                str_ltim = 'y:{}-{}'.format(str(years[0]), str(years[1]))                                                                                                                                          
+            # years = [year1,year2,year3....]            
+            else:
+                str_ltim = 'y:{}-{}'.format(str(years[0]), str(years[-1]))
+        elif isinstance(years, int):
+            str_ltim = 'y:{}'.format(years)
+        else:    
+            raise ValueError( " year can be integer, list, np.array or range(start,end). Got {}, namely {}".format(type(years), years))
     file_paths = get_filepaths(data_path, file_names)#[data_path + '/' + file_name for file_name in file_names]
     data_set = xr.open_mfdataset(file_paths, parallel=True, chunks=chunks, **kwargs)
     data_set = data_set.drop_vars(drop_vars)
