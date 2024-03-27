@@ -84,11 +84,12 @@ def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=Non
     file_paths = get_filepaths(data_path, file_names)#[data_path + '/' + file_name for file_name in file_names]
     data_set = xr.open_mfdataset(file_paths, parallel=True, chunks=chunks, **kwargs)
     data_set = data_set.drop_vars(drop_vars)
-    if chunks['time_counter'] == 'auto':
-        # data_set.time_centered.load() # needs to be loaded or deleted to avoid incosistent chunk sizes
-        data_set = data_set.drop_vars('time_centered')
-    else:
-        data_set.time_centered.chunk({'time_counter': chunks['time_counter']})
+    if 'time_centered' in data_set.coords:
+        if chunks['time_counter'] == 'auto':
+            # data_set.time_centered.load() # needs to be loaded or deleted to avoid incosistent chunk sizes
+            data_set = data_set.drop_vars('time_centered')
+        else:
+            data_set.time_centered.chunk({'time_counter': chunks['time_counter']})
     
     # Rename time dimension
     data_set = data_set.rename({'time_counter': 'time'})
