@@ -4,6 +4,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+import shapefile as shp
 from dask.diagnostics import ProgressBar
 
 from .sub_data     import *
@@ -49,13 +50,15 @@ def get_filepaths(data_path, file_names):
 
 def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=None, height=None, heightidx=None,
               do_tarithm='mean', do_zarithm='mean', descript='', do_compute=False, do_load=True, do_persist=False,
-              file_names=None,
+              file_names=None, do_zweight=False, do_hweight=True,
               drop_vars=['time_centered_bounds', 'time_counter_bounds'],
-              chunks={'time': 'auto', 'lon': 'auto', 'lat': 'auto'}, **kwargs):
+              chunks={'time_counter': 'auto', 'lon': 'auto', 'lat': 'auto'}, **kwargs):
     """
     load OIFS data
     In case file_names is not None: vname and years is just used for metadata info, data_freq is meaningless
     """
+# 'time_centered_bounds', 'time_counter_bounds' are variables
+# time_centered is a coordinate that is not automatically chunked the same way that the data is
 
     xr.set_options(keep_attrs=True)
     # Default values
@@ -81,10 +84,19 @@ def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=Non
     file_paths = get_filepaths(data_path, file_names)#[data_path + '/' + file_name for file_name in file_names]
     data_set = xr.open_mfdataset(file_paths, parallel=True, chunks=chunks, **kwargs)
     data_set = data_set.drop_vars(drop_vars)
+    if chunks['time_counter'] == 'auto':
+        # data_set.time_centered.load() # needs to be loaded or deleted to avoid incosistent chunk sizes
+        data_set = data_set.drop_vars('time_centered')
+    else:
+        data_set.time_centered.chunk({'time_counter': chunks['time_counter']})
     
     # Rename time dimension
     data_set = data_set.rename({'time_counter': 'time'})
     
+    # add weights
+    if (do_zarithm != None) and (do_zarithm != 'None'): raise NotImplementedError('zaveraging is not implemented yet')
+    data_set = do_oifs_weights(data_set, do_zweight=do_zweight, do_hweight=do_hweight)
+
     # years are selected by the files that are open, need to select mon or day or record 
     data_set, mon, day, str_ltim = do_select_time(data_set, mon, day, record, str_ltim)
     
@@ -149,3 +161,106 @@ def open_multiple_data(data_paths, data_names, vname, data_freq, years, mon=None
         del(data_set)
     if (ref_path != None and ref_path != 'None'): del(data_set_ref)
     return data_sets   
+
+
+
+def do_oifs_weights(data_set, do_zweight=False, do_hweight=True):
+    if do_hweight:
+        set_chunk = dict({'lat': data_set.chunksizes['lat']})#'lon': data_set.chunksizes['lon'], })
+        w_cos = xr.DataArray(np.cos(np.deg2rad(data_set.lat)).astype('float32'), dims=['lat']).chunk(set_chunk)
+        data_set = data_set.assign_coords(w_cos=w_cos)
+        del(w_cos)
+    if do_zweight: raise NotImplementedError('zweights is not supported yet')
+    return(data_set)
+
+
+
+def load_index_reg(data, box_list, boxname=None, do_harithm='wmean',
+                   do_zarithm=None, do_outputidx=False,
+                   do_compute=False, do_load=True, do_persist=False, do_checkbasin=False):
+    xr.set_options(keep_attrs=True)
+    index_list = []
+    indexin_list = []
+    cnt = 0
+
+    #___________________________________________________________________________
+    # loop over box_list
+    for box in box_list:
+
+        if not isinstance(box, shp.Reader):
+            if len(box)==2: boxname, box  = box[1], box[0]
+            if box is None or box=='global': boxname='global'
+        else:
+            boxname = os.path.basename(box.shapeName).replace('_',' ')
+
+        if boxname != 'global': raise NotImplementedError('Only global selection supported as of now')
+
+        #_______________________________________________________________________
+        # compute  mask index
+        idx_IN = xr.DataArray(do_boxmask_reg(box, data.lon, data.lat), dims=['lon', 'lat']).chunk({'lon': data.chunksizes['lon'], 'lat': data.chunksizes['lat']})
+
+        #_______________________________________________________________________
+        # check basin selection
+
+        #_______________________________________________________________________
+        # selected points in xarray dataset object and  average over selected points
+        dim_name=['lon', 'lat']
+
+        #_______________________________________________________________________
+        # do horizontal
+        index = do_horizontal_arithmetic_reg(data, do_harithm)
+
+        index_list.append(index)
+        indexin_list.append(idx_IN)
+        del(index)
+
+        if do_compute: index_list[cnt] = index_list[cnt].compute()
+        if do_load   : index_list[cnt] = index_list[cnt].load()
+        if do_persist: index_list[cnt] = index_list[cnt].persist()
+
+        #_______________________________________________________________________
+        vname = list(index_list[cnt].keys())    
+        index_list[cnt][vname[0]].attrs['boxname'] = boxname
+        
+        #_______________________________________________________________________
+        cnt = cnt + 1
+        
+    #___________________________________________________________________________
+    if do_outputidx:
+        return(index_list, idxin_list)
+    else:
+        return(index_list)
+
+
+
+
+
+
+def do_boxmask_reg(box, mesh_lon, mesh_lat):
+
+    #___________________________________________________________________________
+    # a rectangular box is given --> translate into shapefile object
+    if box == None or box == 'global': # if None do global
+        idx_IN = np.ones((mesh_lon.shape[0], mesh_lat.shape[0]), dtype=bool)
+
+    else:
+        raise NotImplementedError("Only global boxes supported")
+    
+    return(idx_IN)
+
+
+
+
+
+def do_horizontal_arithmetic_reg(data, do_harithm):
+    if do_harithm == 'wmean':
+        weights = data['w_cos']
+        data = data.drop_vars('w_cos')
+        #weights = weights.where(np.isnan(data)==False) # I don't know what this does
+        weights = weights/weights.sum(dim='lat', skipna=True)#/len(data.lon)
+        data = data * weights
+        del weights
+        #data = data.sum(dim=['lat', 'lon'], keep_attrs=True, skipna=True)
+        data = data.sum(dim=['lat'], keep_attrs=True, skipna=True).mean(dim='lon', keep_attrs=True, skipna=True)
+        data = data.where(data!=0)
+    return(data)
