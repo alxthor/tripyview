@@ -199,6 +199,8 @@ def load_data_fesom2(mesh, datapath, vname=None, year=None, mon=None, day=None,
     #___________________________________________________________________________
     # set specfic type when loading --> #convert to specific precision
     from functools import partial
+    import sys
+    import dask
     def _preprocess(x, do_prec):
         return x.astype(do_prec, copy=False)
     
@@ -209,12 +211,22 @@ def load_data_fesom2(mesh, datapath, vname=None, year=None, mon=None, day=None,
 
     partial_func = partial(_preprocess, do_prec=do_prec)
     
+    def x_to_nod2(ds):
+        if 'x' in ds.dims and 'nod2' not in ds.dims:
+            dask.distributed.print("x and nod2 seem to be swapped. Renaming dims in {}".format(ds.encoding["source"]))
+            sys.stdout.flush()
+            return ds.rename({'x': 'nod2'})
+        else:
+            # dask.distributed.print("Not doing anything in {}".format(ds.encoding["source"]))
+            # sys.stdout.flush()
+            return ds
+
     #___________________________________________________________________________
     # load multiple files
     # load normal FESOM2 run file
     if do_file=='run':
         data = xr.open_mfdataset(pathlist, parallel=True, chunks=chunks, 
-                                 autoclose=False, preprocess=partial_func, **kwargs)
+                                 autoclose=False, preprocess=(lambda ds: partial_func(x_to_nod2(ds))), **kwargs)
         if do_showtime: 
             print(data.time.data)
             print(data['time.year'])
