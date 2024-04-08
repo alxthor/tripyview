@@ -167,8 +167,11 @@ def open_multiple_data(data_paths, data_names, vname, data_freq, years, mon=None
 
 def do_oifs_weights(data_set, do_zweight=False, do_hweight=True):
     if do_hweight:
-        set_chunk = dict({'lat': data_set.chunksizes['lat']})#'lon': data_set.chunksizes['lon'], })
-        w_cos = xr.DataArray(np.cos(np.deg2rad(data_set.lat)).astype('float32'), dims=['lat']).chunk(set_chunk)
+        if (data_set.chunksizes != {}):
+            set_chunk = dict({'lat': data_set.chunksizes['lat']})#'lon': data_set.chunksizes['lon'], })
+            w_cos = xr.DataArray(np.cos(np.deg2rad(data_set.lat)).astype('float32'), dims=['lat']).chunk(set_chunk)
+        else: 
+            w_cos = xr.DataArray(np.cos(np.deg2rad(data_set.lat)).astype('float32'), dims=['lat'])
         data_set = data_set.assign_coords(w_cos=w_cos)
         del(w_cos)
     if do_zweight: raise NotImplementedError('zweights is not supported yet')
