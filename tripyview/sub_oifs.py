@@ -260,11 +260,10 @@ def do_horizontal_arithmetic_reg(data, do_harithm):
     if do_harithm == 'wmean':
         weights = data['w_cos']
         data = data.drop_vars('w_cos')
-        #weights = weights.where(np.isnan(data)==False) # I don't know what this does
-        weights = weights/weights.sum(dim='lat', skipna=True)#/len(data.lon)
+        weights = weights.where(data.notnull()) # Transforms weights into dataset with every variable and broadcast correspondingly along time, lon
+        weights = weights/weights.sum(dim=['lat', 'lon'], skipna=True)#/len(data.lon)
         data = data * weights
         del weights
-        #data = data.sum(dim=['lat', 'lon'], keep_attrs=True, skipna=True)
-        data = data.sum(dim=['lat'], keep_attrs=True, skipna=True).mean(dim='lon', keep_attrs=True, skipna=True)
+        data = data.sum(dim=['lat', 'lon'], keep_attrs=True, skipna=True)
         data = data.where(data!=0)
     return(data)
