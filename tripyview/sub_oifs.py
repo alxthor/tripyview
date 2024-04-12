@@ -229,7 +229,8 @@ def load_index_reg(data, box_list, boxname=None, do_harithm='wmean',
 
         #_______________________________________________________________________
         vname = list(index_list[cnt].keys())    
-        index_list[cnt][vname[0]].attrs['boxname'] = boxname
+        for vnamei in vname:
+            index_list[cnt][vnamei].attrs['boxname'] = boxname
         
         #_______________________________________________________________________
         cnt = cnt + 1
