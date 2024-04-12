@@ -1,4 +1,5 @@
 import os
+import re
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
@@ -94,6 +95,10 @@ def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=Non
     # Rename time dimension
     data_set = data_set.rename({'time_counter': 'time'})
     
+    # Convert Accumulated fields to instantaneous values by dividing over accumulation period
+    # (cf. https://confluence.ecmwf.int/display/OIFS/How+to+control+OpenIFS+output)
+    data_set = accumulated_to_instantaneous(data_set, vname)
+
     # add weights
     if (do_zarithm != None) and (do_zarithm != 'None'): raise NotImplementedError('zaveraging is not implemented yet')
     data_set = do_oifs_weights(data_set, do_zweight=do_zweight, do_hweight=do_hweight)
@@ -267,3 +272,77 @@ def do_horizontal_arithmetic_reg(data, do_harithm):
         data = data.sum(dim=['lat', 'lon'], keep_attrs=True, skipna=True)
         data = data.where(data!=0)
     return(data)
+
+
+
+
+
+def accumulated_to_instantaneous(data_set, vname):
+    """
+    Convert Accumulated fields to instantaneous values by dividing over accumulation period
+    (cf. https://confluence.ecmwf.int/display/OIFS/How+to+control+OpenIFS+output)
+    
+    The conversion factor will be determined from attribute metadata, more specifically
+        1. "interval_operation".
+        conversion will only take place if the units are hours 'h'. Otherwise input data_set
+        will be returend.
+    
+        2. "units"
+        If 'J m-2' convert to 'W m-2'
+        Else return input dataset
+    
+    Parameters
+    ----------
+    
+    data_set (xr.DataSet): Expected to have a variable equal to vname which in turn should have
+                           typical OIFS metadata
+    
+    vname: Has to be in the list of known accumulated fields for this function to have an effect. 
+           If vname is not in this list, the input dataset will be returned without modification.
+           Currently supported: 'tisr', 'ttr', 'tsr'
+
+
+    Returns
+    -------
+    Dataset
+        Dataset with converted units of the supplied variable
+    """
+    
+    accumulated_fields = ['tisr', 'ttr', 'tsr']
+    conversion_dictionary = {'J m-2': 'W m-2'}
+    
+    if vname in accumulated_fields:
+        
+        # Examine data units
+        units = data_set[vname].units
+        if units in conversion_dictionary: 
+            new_units = conversion_dictionary[units]
+        else:
+            return data_set # unmodified
+        
+        # Examine interval operation value and units        
+        acc_value, acc_unit = extract_number_and_units(data_set[vname].interval_operation, pattern=r'(\d+)\s*([a-zA-Z]+)')
+        if acc_unit == 'h':
+            seconds_in_accumulation_period = acc_value * 60 * 60
+            data_set[vname] = data_set[vname] / seconds_in_accumulation_period
+            data_set[vname].attrs['units'] = new_units
+            return data_set # modified
+        else:
+            return data_set # unmodified
+    else:
+        return data_set # unmodified
+
+
+
+def extract_number_and_units(input_string, pattern=r'(\d+)\s*([a-zA-Z]+)'):
+    # Use the re.match function to search for the pattern in the input string
+    match = re.match(pattern, input_string)
+    
+    if match:
+        # Extract the number and units from the matched groups
+        number = int(match.group(1))
+        units = match.group(2)
+        return number, units
+    else:
+        # If no match is found, return None for both number and units
+        return None, None
