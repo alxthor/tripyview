@@ -1,5 +1,5 @@
 # Patrick Scholz, 14.12.2017
-def colormap_c2c(cmin, cmax, cref, cnumb, cname, cstep=[], do_slog=False):
+def colormap_c2c(cmin, cmax, cref, cnumb, cname, cstep=[], do_slog=False, extend=False):
 
     import numpy                as np
     from   matplotlib.colors    import ListedColormap
@@ -362,6 +362,9 @@ def colormap_c2c(cmin, cmax, cref, cnumb, cname, cstep=[], do_slog=False):
     cmap_idx  = np.linspace(0,1,cmap_def.shape[0])
     
     cint_idx0 = clevel[:-1]+(clevel[1:]-clevel[:-1])/2
+    if extend:
+        cint_idx0 = np.append(clevel[0]-(clevel[1] - clevel[0])/2, cint_idx0)
+        cint_idx0 = np.append(cint_idx0, clevel[-1] + (clevel[-1] - clevel[-2])/2)
     if do_slog: cint_idx0 = clevel_slg10[:-1]+(clevel_slg10[1:]-clevel_slg10[:-1])/2
     
     if cnmb_aref<=sum(cmap_idx>0.5):

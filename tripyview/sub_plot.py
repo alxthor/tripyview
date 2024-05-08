@@ -1644,7 +1644,7 @@ def do_setupcinfo(cinfo, data, do_rescale, mesh=None, tri=None, do_vec=False,
         if cinfo['cref'] == 0.0:
             if cinfo['cref'] > cinfo['cmax']: cinfo['cmax'] = cinfo['cref']+np.finfo(np.float32).eps
             if cinfo['cref'] < cinfo['cmin']: cinfo['cmin'] = cinfo['cref']-np.finfo(np.float32).eps
-        cinfo['cmap'],cinfo['clevel'],cinfo['cref'] = colormap_c2c(cinfo['cmin'],cinfo['cmax'],cinfo['cref'],cinfo['cnum'],cinfo['cstr'])
+        cinfo['cmap'],cinfo['clevel'],cinfo['cref'] = colormap_c2c(cinfo['cmin'],cinfo['cmax'],cinfo['cref'],cinfo['cnum'],cinfo['cstr'], extend=True)
     
     #___________________________________________________________________________
     if 'cmap0' in list(cinfo.keys()): cinfo['cmap'] = cinfo['cmap0'].resampled(cinfo['clevel'].size-1)
