@@ -1270,3 +1270,42 @@ def do_anomaly(data1,data2):
     
     #___________________________________________________________________________
     return(anom)
+
+
+
+
+def merge_variables(varlist_of_explists):
+    """
+    Merges several variables into one list containing in every entry
+    a dataset with the different variables for that experiment.
+    Assumes that variables are different from each other.
+    
+    Parameters
+    ----------
+    varlist_of_explists : Each entry is expected to represent a single
+        variable by being a list of datasets from different experiments
+        that contain only this variable
+    
+    Returns
+    -------
+    list of merged datasets. Each entry representing one experiment
+    """
+    
+    # Assert integrity of data
+    assert varlist_of_explists, "No data passed"
+    # Check if all sublists (varibles) have the same length (number of experiments)
+    assert all(len(varlist) == len(varlist_of_explists[0]) for varlist in varlist_of_explists), "Variables have different number of experiments. Data would get lost."
+    # Transpose data: list of variables --> list of experiments
+    explist_of_varlists = list(zip(*varlist_of_explists))
+    
+    
+    explist = list()
+    for varlist in explist_of_varlists:
+        experiment_ds = xr.merge(varlist, join='exact', compat='identical', combine_attrs='drop_conflicts')
+        # compat is irrelevant, since only different vars are merged
+        # join='exact' makes sure that data is on same lon, lat, time grid
+        # combine_attrs='identical'not possible because uuid, timestamp and name differ.
+        # This should not affect the attributes of the individual variables
+        explist.append(experiment_ds)
+        
+    return explist
