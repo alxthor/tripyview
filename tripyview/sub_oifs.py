@@ -42,7 +42,13 @@ def get_filenames(vname, data_freq, years, prefix='atm_remapped', sep='_'):
 def get_filepaths(data_path, file_names):
     assert os.path.isdir(data_path), "{} is not a directory".format(data_path)
     file_paths = [data_path + '/' + file_name for file_name in file_names]
-    for file_path, file_name in zip(file_paths, file_names): assert os.path.isfile(file_path), "{} is not a file name in {}".format(file_name, data_path)
+    for i, (file_path, file_name) in enumerate(zip(file_paths, file_names)):
+        if i==0: assert os.path.isfile(file_path), "{} is not a file name in {}".format(file_name, data_path)
+        else:
+            if not os.path.isfile(file_path):
+                print("{} is not a file name in {}. Skipping.".format(file_name, data_path))
+                file_paths[i] = None
+    file_paths = [path for path in file_paths if path is not None]
     return file_paths
 
 
