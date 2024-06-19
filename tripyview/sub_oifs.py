@@ -306,7 +306,7 @@ def accumulated_to_instantaneous(data_set, vname):
     
     vname: Has to be in the list of known accumulated fields for this function to have an effect. 
            If vname is not in this list, the input dataset will be returned without modification.
-           Currently supported: 'tisr', 'ttr', 'tsr'
+           Currently supported: 'tisr', 'ttr', 'ttrc', 'tsr', 'tsrc'
 
 
     Returns
@@ -315,7 +315,7 @@ def accumulated_to_instantaneous(data_set, vname):
         Dataset with converted units of the supplied variable
     """
     
-    accumulated_fields = ['tisr', 'ttr', 'tsr']
+    accumulated_fields = ['tisr', 'ttr', 'ttrc', 'tsr', 'tsrc']
     conversion_dictionary = {'J m-2': 'W m-2'}
     
     if vname in accumulated_fields:
