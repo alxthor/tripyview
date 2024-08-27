@@ -17,12 +17,94 @@ from   .sub_colormap            import *
 import pandas as pd
 #xr.set_options(enable_cftimeindex=True)
 
-#+___PRE-ANALYSE ARBITRARY CROSS-SECTION LINE__________________________________+
-#|                                                                             |
-#+_____________________________________________________________________________+
-def do_analyse_transects(input_transect, mesh, edge, edge_tri, edge_dxdy_l, edge_dxdy_r, 
-                          which_res='res', do_rot=True, res=1.0, npts=500):
+#
+#
+#_______________________________________________________________________________
+# --> pre-analyse defined tranects
+def do_analyse_transects(input_transect     , 
+                        mesh                , 
+                        edge                , 
+                        edge_tri            , 
+                        edge_dxdy_l         , 
+                        edge_dxdy_r         , 
+                        do_rot      = True  , 
+                        ):
+    """
+    --> pre-analyse defined transects, with respect to which triangles and edges 
+        are crossed by the transect line. Create transport path edge to compute 
+        modell accurate volume transports.
     
+    Parameters:   
+    
+        :input_transect:    list, to define transects, transects= [[[lon pts], 
+                            [lat pts], name], [...]]
+        
+        :mesh:              fesom2 mesh object, with all mesh information
+        
+        :edge:              np.array([2, nedges]), edge array with indices of participating vertice 
+                            points. Best load info from fesom.mesh.diag.nc
+        
+        :edge_tri:          np.array([2, nedges]), edge triangle array of indices of triangles that 
+                            participate in the edge  [2 x nedges]. If edge is boundary
+                            edge edge_tri[1, idx] = -1. Best load info from fesom.mesh.diag.nc
+                            
+        :edge_dxdy_l:       np.array([2, nedges]), array with dx, dy cartesian length of distance from 
+                            edge mid points to centroid of left side triangle from 
+                            edge. Best load info from fesom.mesh.diag.nc
+                            
+        :edge_dxdy_r:       np.array([2, nedges]), array with dx, dy cartesian length of distance from 
+                            edge mid points to centroid of right side triangle from 
+                            edge. Best load info from fesom.mesh.diag.nc  
+                            
+        :do_rot:            bool, (default=True) assume that the the edge_dxdy_l, 
+                            edge_dxdy_r arrays are in the rotated coordinate frame
+                            and needed to be rotated into geo coordinates
+
+    Return:
+    
+        :transect_list:     list of transect dictionary 
+        
+    transect dictionary keys:    
+    
+    ::
+    
+        #_______________________________________________________________________
+        # arrays that define cross-section 
+        transect['Name'         ] = [] # Name of transect
+        transect['lon'          ] = [] # transect defining longitude list
+        transect['lat'          ] = [] # transect defining latitude list
+        transect['ncsi'         ] = [] # running index of number of defined transects
+        transect['ncs'          ] = [] # number transect defining points
+        transect['Px'           ] = [] # lon points  that define the transect edges 
+        transect['Py'           ] = [] # lat points  that define the transect edges 
+        transect['e_vec'        ] = [] # unit vector of transect edges
+        transect['e_norm'       ] = [] # length of unit vector (length of edge)
+        transect['n_vec'        ] = [] # normal vector of transect edges
+        transect['alpha'        ] = [] # bearing of transect edge
+        
+        #_______________________________________________________________________
+        # arrays that define the intersection between cross-section and edges
+        transect['edge_cut_i'   ] = [] # indice of edges that are cutted by transect
+        transect['edge_cut_evec'] = [] # unit vector of those cutted edges
+        transect['edge_cut_P'   ] = [] # lon, lat point where transect cutted with edge
+        transect['edge_cut_midP'] = [] # mid points of cutted edge
+        transect['edge_cut_lint'] = [] # interpolator for cutting points on edge
+        transect['edge_cut_ni'  ] = [] # node indices of intersectted edges
+        transect['edge_cut_dist'] = [] # distance of cutted edge midpoint from start point of transect
+        
+        #_______________________________________________________________________
+        # arrays to define transport path
+        transect['path_xy'      ] = [] # lon/lat coordinates, edge midpoints --> elem centroid --> edge mid points ...
+        transect['path_ei'      ] = [] # elem indices
+        transect['path_ni'      ] = [] # node indices of elems 
+        transect['path_dx'      ] = [] # dx of path sections
+        transect['path_dy'      ] = [] # dy of path sections
+        transect['path_dist'    ] = [] # dy of path sections
+        transect['path_nvec_cs' ] = [] # normal vector of transection segment
+    
+    ____________________________________________________________________________
+
+    """
     transect_list = []
     # loop over transects in list
     for transec_lon, transec_lat, transec_name in input_transect:
@@ -370,6 +452,8 @@ def _do_build_path(mesh, transect, edge_tri, edge_dxdy_l, edge_dxdy_r):
     # loop over intersected edges 
     nced = transect['edge_cut_i'][-1].size
     for edi in range(0,nced):
+        #print(' --> ', edi)
+        
         #_______________________________________________________________________
         # --> rotate edge with bearing angle -alpha
         # determine if edge shows to the left or to the right with 
@@ -380,7 +464,6 @@ def _do_build_path(mesh, transect, edge_tri, edge_dxdy_l, edge_dxdy_r):
         auxx = transect['edge_cut_evec'][-1][edi,0]*np.cos(alpha)-transect['edge_cut_evec'][-1][edi,1]*np.sin(alpha)
         auxy = transect['edge_cut_evec'][-1][edi,0]*np.sin(alpha)+transect['edge_cut_evec'][-1][edi,1]*np.cos(alpha)
         theta= np.arctan2(auxy,auxx)
-        # print(theta*180/np.pi)
         del(auxx, auxy)
                 
         # indices of [L]eft and [R]ight triangle with respect to the edge
@@ -392,10 +475,10 @@ def _do_build_path(mesh, transect, edge_tri, edge_dxdy_l, edge_dxdy_r):
         path_xy, path_ei, path_ni, path_dx, path_dy = __add_upsection_elem2path(mesh, transect, edi, nced, theta, 
                                                   edge_elem, edge_dxdy_l, edge_dxdy_r,
                                                   path_xy, path_ei, path_ni, path_dx, path_dy)
-            
+        
         # add edge mid point of cutted edge
         path_xy.append(transect['edge_cut_midP'][-1][edi])
-            
+        
         # add downsection element to path if it exist
         path_xy, path_ei, path_ni, path_dx, path_dy = __add_downsection_elem2path(mesh, transect, edi, nced, theta, 
                                                   edge_elem, edge_dxdy_l, edge_dxdy_r,
@@ -447,9 +530,15 @@ def __add_downsection_elem2path(mesh, transect, edi, nced, theta, edge_elem, edg
     if (theta>=0):
         # right triangle
         if edge_elem[1]>=0:
-            e_xR, e_yR = np.sum(mesh.n_x[mesh.e_i[edge_elem[1],:]])/3.0, np.sum(mesh.n_y[mesh.e_i[edge_elem[1],:]])/3.0
+            # take care if there are periodic boundaries
+            e_xR = mesh.n_x[mesh.e_i[edge_elem[1],:]]
+            if np.max(e_xR)-np.min(e_xR)>180:
+                if np.sum(e_xR>0) > np.sum(e_xR<0): e_xR[e_xL<0] = e_xR[e_xL<0]+360.0
+                else                              : e_xR[e_xL>0] = e_xR[e_xL>0]-360.0
+            e_xR, e_yR = np.sum(e_xR)/3.0, np.sum(mesh.n_y[mesh.e_i[edge_elem[1],:]])/3.0
             path_xy.append(np.array([e_xR, e_yR]))
             del(e_xR, e_yR)
+            
             path_ei.append(edge_elem[1])
             path_ni.append(mesh.e_i[edge_elem[1], :])
             path_dx.append(edge_dxdy_r[0, transect['edge_cut_i'][-1][edi]])
@@ -475,13 +564,20 @@ def __add_downsection_elem2path(mesh, transect, edi, nced, theta, edge_elem, edg
     #                 [R]right | Triangle 
     else:
         # left triangle
-        e_xL, e_yL = np.sum(mesh.n_x[mesh.e_i[edge_elem[0],:]])/3.0, np.sum(mesh.n_y[mesh.e_i[edge_elem[0],:]])/3.0
+        e_xL = mesh.n_x[mesh.e_i[edge_elem[0],:]]
+        if np.max(e_xL)-np.min(e_xL)>180:
+            if np.sum(e_xL>0) > np.sum(e_xL<0): e_xL[e_xL<0] = e_xL[e_xL<0]+360.0
+            else                              : e_xL[e_xL>0] = e_xL[e_xL>0]-360.0
+        e_xL, e_yL = np.sum(e_xL)/3.0, np.sum(mesh.n_y[mesh.e_i[edge_elem[0],:]])/3.0
         path_xy.append(np.array([e_xL, e_yL]))
         del(e_xL, e_yL)
+        
         path_ei.append(edge_elem[0])
         path_ni.append(mesh.e_i[edge_elem[0], :])
         path_dx.append(edge_dxdy_l[0, transect['edge_cut_i'][-1][edi]])
         path_dy.append(edge_dxdy_l[1, transect['edge_cut_i'][-1][edi]])
+        
+        
         
     #___________________________________________________________________________
     return(path_xy, path_ei, path_ni, path_dx, path_dy)
@@ -499,6 +595,16 @@ def __add_upsection_elem2path(mesh, transect, edi, nced, theta, edge_elem, edge_
     #                          | 
     #                   [L]eft | Triangle upsection triangle
     if (theta>=0):
+        if edi==0:
+            # take care if there are periodic boundaries
+            e_xL = mesh.n_x[mesh.e_i[edge_elem[0],:]]
+            if np.max(e_xL)-np.min(e_xL)>180:
+                if np.sum(e_xL>0) > np.sum(e_xL<0): e_xL[e_xL<0] = e_xL[e_xL<0]+360.0
+                else                              : e_xL[e_xL>0] = e_xL[e_xL>0]-360.0
+            e_xL, e_yL = np.sum(e_xL)/3.0, np.sum(mesh.n_y[mesh.e_i[edge_elem[0],:]])/3.0
+            path_xy.append(np.array([e_xL, e_yL]))
+            del(e_xL, e_yL)
+            
         # left triangle 
         path_ei.append(edge_elem[0])
         path_ni.append(mesh.e_i[edge_elem[0], :])
@@ -519,6 +625,16 @@ def __add_upsection_elem2path(mesh, transect, edi, nced, theta, edge_elem, edge_
     else:
         # right triangle
         if edge_elem[1]>=0:
+            if edi==0:
+                # take care if there are periodic boundaries
+                e_xR = mesh.n_x[mesh.e_i[edge_elem[1],:]]
+                if np.max(e_xR)-np.min(e_xR)>180:
+                    if np.sum(e_xR>0) > np.sum(e_xR<0): e_xR[e_xL<0] = e_xR[e_xL<0]+360.0
+                    else                              : e_xR[e_xL>0] = e_xR[e_xL>0]-360.0
+                e_xR, e_yR = np.sum(e_xR)/3.0, np.sum(mesh.n_y[mesh.e_i[edge_elem[1],:]])/3.0
+                path_xy.append(np.array([e_xR, e_yR]))
+                del(e_xR, e_yR)
+                
             path_ei.append(edge_elem[1])
             path_ni.append(mesh.e_i[edge_elem[1], :])
             
@@ -641,12 +757,38 @@ def _do_compute_distance_from_startpoint(transect):
     return(transect)
     
 
-
-#+___COMPUTE VOLUME TRANSPORT THROUGH TRANSECT_________________________________+
-#|                                                                             |
-#+_____________________________________________________________________________+ 
+#
+#
+#___COMPUTE VOLUME TRANSPORT THROUGH TRANSECT___________________________________
 def calc_transect_transp(mesh, data, transects, do_transectattr=False, do_rot=True, do_info=True):
-    #t1=clock.time()
+    """
+    --> Compute fesom2 modell accurate transport through defined transect
+    
+    Parameters:
+    
+        :mesh:          fesom2 tripyview mesh object,  with all mesh information 
+        
+        :data:          object, with xarray dataset object with 3d element zonal and meridional
+                        velocities
+        
+        :transects:     list with analysed transect dictionary information computed by 
+                        do_analyse _trasnsects
+                        
+        :do_transectattr: bool, (default=True) write full transect info into return
+                        xarray dataset attribute
+        
+        :do_rot:        bool, (default=True), do rotation of velocities from rotated
+                        to geo coordinates
+        
+        :do_info:       bool, (default=True), write info
+    
+    Return:
+    
+        :data:          list with returned xarray dataset object that contain volume 
+                        transport through every section of the transport path
+    
+    ____________________________________________________________________________
+    """
     #___________________________________________________________________________
     if isinstance(transects, list): 
         #if len(transects)>1:
@@ -734,6 +876,9 @@ def calc_transect_transp(mesh, data, transects, do_transectattr=False, do_rot=Tr
         
         #_______________________________________________________________________
         # define variable 
+        gattrs = data.attrs
+        gattrs['proj']          = 'index+depth+xy'
+        
         data_vars = dict()
         aux_attr  = data[vname].attrs
         #aux_attr['long_name'], aux_attr['units'] = 'Transport through cross-section', 'Sv'
@@ -748,7 +893,7 @@ def calc_transect_transp(mesh, data, transects, do_transectattr=False, do_rot=Tr
         # define coordinates
         if 'time' in data.dims:
             coords = {
-                      'time ' : (list_dimname['time' ], list_dimval['time']),
+                      'time'  : (list_dimname['time' ], list_dimval['time']),
                       'depth' : (list_dimname['depth'], list_dimval['depth']),
                       'lon'   : (list_dimname['horiz'], lon),
                       'lat'   : (list_dimname['horiz'], lat),
@@ -768,7 +913,7 @@ def calc_transect_transp(mesh, data, transects, do_transectattr=False, do_rot=Tr
         #_______________________________________________________________________
         # create dataset
         if is_list:
-            transp.append(xr.Dataset(data_vars=data_vars, coords=coords, attrs=data.attrs))
+            transp.append(xr.Dataset(data_vars=data_vars, coords=coords, attrs=gattrs))
             # we have to set the time here with assign_coords otherwise if its 
             # setted in xr.Dataset(..., coords=dict(...),...)xarray does not 
             # recognize the cfttime format and things like data['time.year']
@@ -779,7 +924,7 @@ def calc_transect_transp(mesh, data, transects, do_transectattr=False, do_rot=Tr
                 print(' (+) transport:', transp[-1]['transp'].where(transp[-1]['transp']>0).sum(dim=('npts','nz1'), skipna=True).data,' [Sv]')
                 print(' (-) transport:', transp[-1]['transp'].where(transp[-1]['transp']<0).sum(dim=('npts','nz1'), skipna=True).data,' [Sv]')
         else:
-            transp = xr.Dataset(data_vars=data_vars, coords=coords, attrs=data.attrs, )
+            transp = xr.Dataset(data_vars=data_vars, coords=coords, attrs=gattrs )
             # we have to set the time here with assign_coords otherwise if its 
             # setted in xr.Dataset(..., coords=dict(...),...)xarray does not 
             # recognize the cfttime format and things like data['time.year']
@@ -795,12 +940,40 @@ def calc_transect_transp(mesh, data, transects, do_transectattr=False, do_rot=Tr
 
 
 
-
-#+___COMPUTE TRANSECT OF SCALAR VERTICE/ELEMENTAL VARIABLE_____________________+
-#|                                                                             |
-#+_____________________________________________________________________________+ 
+#
+#
+#___COMPUTE TRANSECT OF SCALAR VERTICE/ELEMENTAL VARIABLE_______________________
 def calc_transect_scalar(mesh, data, transects, nodeinelem=None, 
                          do_transectattr=False, do_info=False):
+    """
+    --> interpolate scalar vertice values onto cutting point position where
+        cross-section intersects with edge
+    
+    Parameters: 
+        
+        :mesh:          fesom2 tripyview mesh object,  with all mesh information 
+        
+        :data:          object, with xarray dataset object containing 3d vertice values. 
+                        Can also be done with scalar datas on elements but than nodeinelem is needed
+        
+        transects:     list with analysed transect dictionary information computed by 
+                        do_analyse _trasnsects
+                        
+        nodeinelem:     np.array with elem indices that contribute to a vertice 
+                        point (default=None)              
+                        
+        :do_transectattr: bool, (default=True) write full transect info into return
+                        xarray dataset attribute
+                        
+        :do_info:       bool, (default=True), write info     
+        
+    Return:
+    
+        :data:          list with returned xarray dataset object that contains to
+                        the cutting point interpolated scalar values of transect
+    
+    ____________________________________________________________________________
+    """
     t1=clock.time()
     #___________________________________________________________________________
     if isinstance(transects, list): 
@@ -868,7 +1041,6 @@ def calc_transect_scalar(mesh, data, transects, nodeinelem=None,
                     dst = transect['edge_cut_dist'][:-1]
                 
             else:
-                #print(" >-)))°> DICK FICH <°(((-< (1.2)")
                 # average over all elemental values that contribute to edge node 1
                 #        o-----o
                 #       / \   / \
@@ -949,16 +1121,21 @@ def calc_transect_scalar(mesh, data, transects, nodeinelem=None,
         elif 'nz'   in data.dims: list_dimname.append('nz'  ), list_dimsize.append(mesh.zlev.size), list_dimval.append(mesh.zlev)  
         list_dimname.append('npts'), list_dimsize.append(dst.size)
         
+        
+        gattrs = data.attrs
+        gattrs['proj']          = 'index+depth+xy'
+        
         # define variable 
         data_vars = dict()
-        aux_attr  = data[vname].attrs
-        aux_attr['transect_name'] = transect['Name']
-        aux_attr['transect_lon']  = transect['lon']
-        aux_attr['transect_lat']  = transect['lat']
-        if do_transectattr: aux_attr['transect'] = transect
+        lattr  = data[vname].attrs
+        lattr['transect_name'] = transect['Name']
+        lattr['transect_lon']  = transect['lon']
+        lattr['transect_lat']  = transect['lat']
+        if do_transectattr: lattr['transect'] = transect
         
         #data_vars['transp'] = (list_dimname, scalarPcut, aux_attr) 
-        data_vars[vname] = (list_dimname, scalarPcut, aux_attr) 
+        data_vars[vname] = (list_dimname, scalarPcut, lattr) 
+        del(lattr)
         
         # define coordinates
         coords = dict()
@@ -978,14 +1155,14 @@ def calc_transect_scalar(mesh, data, transects, nodeinelem=None,
 
         # create dataset
         if is_list:
-            csects.append(xr.Dataset(data_vars=data_vars, coords=coords, attrs=data.attrs))
+            csects.append(xr.Dataset(data_vars=data_vars, coords=coords, attrs=gattrs))
             # we have to set the time here with assign_coords otherwise if its 
             # setted in xr.Dataset(..., coords=dict(...),...)xarray does not 
             # recognize the cfttime format and things like data['time.year']
             # are not possible
             if 'time' in data.dims: csects[-1] = csects[-1].assign_coords(time=data.time)  
         else:
-            csects = xr.Dataset(data_vars=data_vars, coords=coords, attrs=data.attrs)
+            csects = xr.Dataset(data_vars=data_vars, coords=coords, attrs=gattrs)
             # we have to set the time here with assign_coords otherwise if its 
             # setted in xr.Dataset(..., coords=dict(...),...)xarray does not 
             # recognize the cfttime format and things like data['time.year']
@@ -997,35 +1174,91 @@ def calc_transect_scalar(mesh, data, transects, nodeinelem=None,
     return(csects)
 
 
-
-#+___PLOT TRANSECT POSITION____________________________________________________+
-#|                                                                             |
-#+_____________________________________________________________________________+ 
-def plot_transect_position(mesh, transect, edge=None, zoom=None, fig=None,  figsize=[10,10],
+#
+#
+#___PLOT TRANSECT POSITION______________________________________________________
+def plot_transect_position(mesh, transect, edge=None, zoom=None, fig=None,  figsize=[10,10], 
+                           proj='nears', box = [-180, 180,-90, 90], 
                            resolution='low', do_path=True, do_labels=True, do_title=True,
                            do_grid=False, ax_pos=[0.90, 0.05, 0.45, 0.45]):
+    """
+    --> plot transect positions
+    
+    Parameters:
+    
+        :mesh:          fesom2 tripyview mesh object,  with all mesh information 
+        
+        :transects:     list with analysed transect dictionary information computed by 
+                        do_analyse _trasnsects
+        
+        :edge:          provide np.array with node indices of edge (default=None)
+        
+        :zoom:          float, (default=None), zzom factor for nearside projection
+        
+        :fig:           matplotlib figure handle, (default=None)
+        
+        :figsize:       list, (default=[10,10]) width and height of figure
+        
+        :proj:          str, (default='nears'), can be any other projections string
+                        
+                        - pc     ... PlateCarree         (box=[lonmin, lonmax, latmin, latmax])
+                        - merc   ... Mercator            (box=[lonmin, lonmax, latmin, latmax])
+                        - rob    ... Robinson            (box=[lonmin, lonmax, latmin, latmax])
+                        - eqearth... EqualEarth          (box=[lonmin, lonmax, latmin, latmax])
+                        - mol    ... Mollweide           (box=[lonmin, lonmax, latmin, latmax])
+                        - nps    ... NorthPolarStereo    (box=[-180, 180, >0, latmax])
+                        - sps    ... SouthPolarStereo    (box=[-180, 180, latmin, <0])
+                        - ortho  ... Orthographic        (box=[loncenter, latcenter]) 
+                        - nears  ... NearsidePerspective (box=[loncenter, latcenter, zoom]) 
+                        - channel... PlateCaree
+                        
+        :box:           None, list (default:  [-180, 180,-90, 90]) 
+                        regional limitation of plot. For ortho...
+                        box=[lonc, latc], nears...box=[lonc, latc, zoom], for all others box = 
+                        [lonmin, lonmax, latmin, latmax]. For nears box is computed based
+                        on transect definition.
+                        
+        :do_path:       bool, (default=True) plot entire transport path       
+        
+        :do_labels:     bool, (default=True) draw lon, lat axes do_labels
+        
+        :do_title:      bool, (default=True) draw title with name of transect
+        
+        :do_grid:       bool, (default=False) plot fesom mesh in background
+        
+    Returns:
+    
+        :hfig: returns figure handle 
+
+        :hax: returns axes handle 
+    
+    ____________________________________________________________________________
+    """
     #___________________________________________________________________________
     # compute zoom factor based on the length of the transect
-    if zoom is None: 
-        Rearth = 6367.5  # [km]
-        x,y,z  = grid_cart3d(transect['path_xy'][[0,-1],0], transect['path_xy'][[0,-1],1], is_deg=True)
-        dist   = np.arccos(x[0]*x[1] + y[0]*y[1] + z[0]*z[1])*Rearth
-        #zoom = (np.pi*6367.5)/transect['edge_cut_dist'].max()
-        zoom = (np.pi*Rearth)/dist
-        del(dist, x, y, z)
+    if zoom is None:
+        if np.abs(np.diff(transect['path_xy'][[0,-1],0]))<=180: 
+            Rearth = 6367.5  # [km]
+            x,y,z  = grid_cart3d(transect['path_xy'][[0,-1],0], transect['path_xy'][[0,-1],1], is_deg=True)
+            dist   = np.arccos(x[0]*x[1] + y[0]*y[1] + z[0]*z[1])*Rearth
+            print(dist)
+            #zoom = (np.pi*6367.5)/transect['edge_cut_dist'].max()
+            zoom = (np.pi*Rearth)/dist
+            del(dist, x, y, z)
+        else:
+            if proj == 'nears': proj = 'rob'
     
     #___________________________________________________________________________
     orig = ccrs.PlateCarree()
-    proj = ccrs.NearsidePerspective(central_longitude=transect['edge_cut_P'][:,0].mean(), 
-                                    central_latitude =transect['edge_cut_P'][:,1].mean(), 
-                                    satellite_height =35785831/zoom)
+    if proj == 'nears': box = [transect['edge_cut_P'][:,0].mean(), transect['edge_cut_P'][:,1].mean(), zoom]
+    proj_to, box = do_projection(mesh, proj, box)
     
     #___________________________________________________________________________
     if fig is None: 
         fig = plt.figure(figsize=figsize)
-        ax  = plt.axes(projection=proj)
+        ax  = plt.axes(projection=proj_to)
     else:
-        ax = fig.add_axes(ax_pos, projection=proj)
+        ax = fig.add_axes(ax_pos, projection=proj_to)
         
     pkg_path = os.path.dirname(__file__)
     bckgrndir = os.path.normpath(pkg_path+'/backgrounds/')
@@ -1093,442 +1326,70 @@ def plot_transect_position(mesh, transect, edge=None, zoom=None, fig=None,  figs
     return(fig, ax)
 
 
+#
+#
+#___COMPUTE ZONAL MEAN SECTION BASED ON BINNING_________________________________
+def load_zmeantransect_fesom2(mesh                  , 
+                              data                  , 
+                              box_list              , 
+                              dlat          =0.5    , 
+                              boxname       =None   ,
+                              diagpath      =None   , 
+                              do_checkbasin =False  , 
+                              do_compute    =False  , 
+                              do_load       =True   , 
+                              do_persist    =False  , 
+                              do_info       =False  , 
+                              **kwargs,):
+    """
+    --> compute zonal means transect, defined by regional box_list
+    
+    Parameters:
+        
+        :mesh:      fesom2 mesh object, with all mesh information
 
-#+___PLOT TRANSECT LINE________________________________________________________+
-#|                                                                             |
-#+_____________________________________________________________________________+
-def plot_transect(data, transects, tsidx=0, figsize=[12, 6], 
-              n_rc=[1, 1], do_grid=True, cinfo=None, do_rescale=False,
-              do_reffig=False, ref_cinfo=None, ref_rescale=False,
-              cbar_nl=8, cbar_orient='vertical', cbar_label=None, cbar_unit=None,
-              do_bottom=True, max_dep=[], color_bot=[0.6, 0.6, 0.6], 
-              pos_fac=1.0, pos_gap=[0.02, 0.02], do_save=None, save_dpi=600, 
-              do_contour=True, do_clabel=True, title='descript', which_xaxis='lat', 
-              pos_extend=[0.05, 0.08, 0.95,0.95], do_ylog=True, do_smooth=False, 
-              do_position=True, mesh=None, 
-            ):
-    #____________________________________________________________________________
-    fontsize = 12
-    rescale_str = None
-    
-    #___________________________________________________________________________
-    # make matrix with row colum index to know where to put labels
-    rowlist = np.zeros((n_rc[0], n_rc[1]))
-    collist = np.zeros((n_rc[0], n_rc[1]))       
-    for ii in range(0,n_rc[0]): rowlist[ii,:]=ii
-    for ii in range(0,n_rc[1]): collist[:,ii]=ii
-    rowlist = rowlist.flatten()
-    collist = collist.flatten()
-    
-    #___________________________________________________________________________    
-    # create figure and axes
-    fig, ax = plt.subplots( n_rc[0],n_rc[1], figsize=figsize, 
-                            gridspec_kw=dict(left=0.1, bottom=0.1, right=0.9, top=0.9, wspace=0.05, hspace=0.05,),
-                            constrained_layout=False, sharex=True, sharey=True)
-    
-    #___________________________________________________________________________    
-    # flatt axes if there are more than 1
-    if isinstance(ax, np.ndarray): ax = ax.flatten()
-    else:                          ax = [ax] 
-    nax = len(ax)
-     
-    #___________________________________________________________________________
-    # data must be list filled with xarray data
-    if not isinstance(data  , list): data  = [data]
-    ndata = len(data) 
-    
-    #___________________________________________________________________________
-    # set up color info 
-    if do_reffig:
-        ref_cinfo = do_setupcinfo(ref_cinfo, [data[0]], ref_rescale, do_index=True)
-        cinfo     = do_setupcinfo(cinfo    , data[1:] , do_rescale , do_index=True)
-    else:    
-        cinfo     = do_setupcinfo(cinfo, data, do_rescale, do_index=True, boxidx=tsidx)
+        :data:      xarray dataset object, or list of xarray dataset object with 3d vertice
+                    data
 
-    #_______________________________________________________________________
-    # setup normalization log10, symetric log10, None
-    which_norm = do_compute_scalingnorm(cinfo, do_rescale)
-    if do_reffig:
-        which_norm_ref = do_compute_scalingnorm(ref_cinfo, ref_rescale)
-        
-    #___________________________________________________________________________
-    # loop over axes
-    hpall=list()
-    for ii in range(0,ndata):
-        
-        #_______________________________________________________________________
-        # limit data to color range
-        vname= list(data[ii][tsidx].keys())[0]
-        data_plot = data[ii][tsidx][vname].values.copy()
-        
-        #_______________________________________________________________________
-        # setup x-coord and y-coord
-        # determine if lon and lat are valid axis for plotting if not use distance
-        # as x-axis
-        auxdst = np.diff(data[0][tsidx]['dst'].values)
-        auxlat, auxlon = data[0][tsidx]['lat'].values[1:], data[0][tsidx]['lon'].values[1:]
-        auxlat, auxlon = auxlat[auxdst!=0.0], auxlon[auxdst!=0.0]
-        is_ok = (np.isnan(auxlon)==False)
-        auxlat, auxlon = auxlat[is_ok], auxlon[is_ok]
-        if   np.all(np.diff(auxlat)==0) : which_xaxis='lon'
-        elif np.all(np.diff(auxlon)==0) : which_xaxis='lat'
-        elif np.any(np.diff(auxlat)==0) and not np.any(np.diff(auxlon)==0): which_xaxis='lon'
-        elif np.any(np.diff(auxlon)==0) and not np.any(np.diff(auxlat)==0): which_xaxis='lat'
-        else                            : which_xaxis='dist' 
-        
-        if   which_xaxis=='lat' : data_x, str_xlabel = data[ii][tsidx]['lat'].values, 'Latitude [deg]'
-        elif which_xaxis=='lon' : data_x, str_xlabel = data[ii][tsidx]['lon'].values, 'Longitude [deg]'
-        elif which_xaxis=='dist': data_x, str_xlabel = data[ii][tsidx]['dst'].values, 'Distance from start point [km]'
-        else: raise ValueError('these definition for which_xaxis is not supported')
-        
-        data_y, str_ylabel = data[ii][tsidx]['depth'].values, 'Depth [m]'    
-        data_y = np.abs(data_y)
-        
-        #_______________________________________________________________________
-        if do_reffig: 
-            if ii==0: cinfo_plot, which_norm_plot = ref_cinfo, which_norm_ref
-            else    : cinfo_plot, which_norm_plot = cinfo    , which_norm
-        else        : cinfo_plot, which_norm_plot = cinfo    , which_norm
-        
-        #_______________________________________________________________________
-        # be sure there are no holes
-        data_plot[data_plot<cinfo_plot['clevel'][ 0]] = cinfo_plot['clevel'][ 0]+np.finfo(np.float32).eps
-        data_plot[data_plot>cinfo_plot['clevel'][-1]] = cinfo_plot['clevel'][-1]-np.finfo(np.float32).eps
-        
-        #___________________________________________________________________________
-        # apply horizontal smoothing filter
-        if do_smooth: 
-            data_plotorig = data_plot.copy()
-            filt=np.array([1,2,3,2,1])
-            #filt=np.array([1,2,1])
-            filt=filt[np.newaxis,:]
-            filt=filt/np.sum(filt.flatten())
-            is_nanbf = np.isnan(data_plot)
-            data_plot = convolve2d(data_plot, filt, mode='same', boundary='symm') 
-            is_nanaf = np.isnan(data_plot)
-            
-            idx= ((is_nanbf==False) & (is_nanaf==True))
-            data_plot[idx] = data_plotorig[idx]
-            del(is_nanbf, is_nanaf, filt)
-            
-        #_______________________________________________________________________
-        # plot MOC
-        hp=ax[ii].contourf(data_x, data_y, data_plot, 
-                           levels=cinfo_plot['clevel'], extend='both', cmap=cinfo_plot['cmap'],
-                           norm = which_norm_plot)
-        hpall.append(hp)
-        
-        if do_contour: 
-            tickl    = cinfo_plot['clevel']
-            ncbar_l  = len(tickl)
-            idx_cref = np.where(cinfo_plot['clevel']==cinfo_plot['cref'])[0]
-            #idx_cref = np.asscalar(idx_cref)
-            idx_cref = idx_cref.item()
-            nstep    = ncbar_l/cbar_nl
-            nstep    = np.max([np.int32(np.floor(nstep)),1])
-            
-            idx = np.arange(0, ncbar_l, 1)
-            idxb = np.ones((ncbar_l,), dtype=bool)                
-            idxb[idx_cref::nstep]  = False
-            idxb[idx_cref::-nstep] = False
-            idx_yes = idx[idxb==False]
-            
-            cont=ax[ii].contour(data_x, data_y, data_plot,
-                            levels=cinfo_plot['clevel'][idx_yes], colors='k', linewidths=[0.5],
-                            norm = which_norm_plot) #linewidths=[0.5,0.25])
-            #if do_clabel: 
-                #ax[ii].clabel(cont, cont.levels, inline=1, inline_spacing=1, fontsize=6, fmt='%1.1f Sv')
-                #ax[ii].clabel(cont, cont.levels[np.where(cont.levels!=cinfo_plot['cref'])], 
-                            #inline=1, inline_spacing=1, fontsize=6, fmt='%1.1f Sv')
-        #___________________________________________________________________
-        #ylim = np.sum(~np.isnan(data_plot),axis=0).max()-1
-        ylim = np.sum(~np.isnan(data_plot),axis=0).max()
-        if ylim<data_y.shape[0]-1: ylim=ylim+1
-        ylim = np.min([ylim, data_y.size-1])
-        if np.isscalar(max_dep)==False: max_dep=data_y[ylim]
-        
-        # plot bottom patch
-        aux_bot = np.ones(data_plot.shape,dtype='int32')
-        aux_bot[np.isnan(data_plot)]=0
-        aux_bot = aux_bot.sum(axis=0)
-        #aux[aux!=0]=aux[aux!=0]-1
-        aux_bot=aux_bot-1
-        bottom = np.abs(data_y[aux_bot])
-        bottom[aux_bot<0]=0.1
-        
-        # smooth bottom patch
-        #filt   = np.array([1,2,1]) #np.array([1,2,3,2,1])
-        #filt   = filt/np.sum(filt)
-        #aux    = np.concatenate( (np.ones((filt.size,))*bottom[0],bottom,np.ones((filt.size,))*bottom[-1] ) )
-        #aux    = np.convolve(aux,filt,mode='same')
-        #bottom = aux[filt.size:-filt.size]
-        #bottom[aux_bot<0]=0.1
-        
-        # plot bottom patch 
-        ax[ii].fill_between(data_x, bottom, max_dep,color=color_bot)#,alpha=0.95)
-        ax[ii].plot(data_x, bottom, color='k')
-        ax[ii].set_facecolor(color_bot) 
-        #_______________________________________________________________________
-        # fix color range
-        for im in ax[ii].get_images(): im.set_clim(cinfo_plot['clevel'][ 0], cinfo_plot['clevel'][-1])
-        
-        #_______________________________________________________________________
-        # plot grid lines 
-        if do_grid: ax[ii].grid(color='k', linestyle='-', linewidth=0.25,alpha=1.0)
-        
-        #_______________________________________________________________________
-        # set description string plus x/y labels
-        isnotnan = np.isnan(data_plot[:,0])==False
-        isnotnan = isnotnan.sum()-1
-        
-        if title is not None: 
-            #txtx, txty = data_x[0]+(data_x[-1]-data_x[0])*0.025, data_y[isnotnan]-(data_y[isnotnan]-data_y[0])*0.025                    
-            txtx, txty = data_x[0]+(data_x[-1]-data_x[0])*0.015, max_dep-(max_dep-data_y[0])*0.015
-            if   isinstance(title,str) : 
-                # if title string is 'descript' than use descript attribute from 
-                # data to set plot title 
-                if title=='descript' and ('descript' in data[ii][tsidx][vname].attrs.keys() ):
-                    txts = data[ii][tsidx][vname].attrs['descript']
-                else:
-                    txts = title
-            # is title list of string        
-            elif isinstance(title,list):   
-                txts = title[ii]
-            ax[ii].text(txtx, txty, txts, fontsize=12, fontweight='bold',
-                        horizontalalignment='left', verticalalignment='bottom')
-        
-        #_______________________________________________________________________
-        # set x/y label
-        if collist[ii]==0        : ax[ii].set_ylabel(str_ylabel, fontsize=12)
-        if rowlist[ii]==n_rc[0]-1: ax[ii].set_xlabel(str_xlabel, fontsize=12)
-        
-        #_______________________________________________________________________
-        if do_ylog: 
-            ax[ii].grid(True,which='major')
-            #ax[ii].set_yscale('log')
-            ax[ii].set_yscale('function', functions=(forward, inverse))
-            #yticklog = np.array([5,10,25,50,100,250,500,1000,2000,4000,6000])
-            yticklog = np.array([10,25,50,100,250,500,1000,2000,4000,6000])
-            ax[ii].set_yticks(yticklog)
-            if data_y[0]==0: ax[ii].set_ylim(data_y[1],max_dep)
-            else           : ax[ii].set_ylim(data_y[0],max_dep)
-            ax[ii].invert_yaxis()
-            
-        else:
-            ax[ii].set_ylim(data_y[0],max_dep)
-            ax[ii].invert_yaxis()
-            ax[ii].grid(True,which='major')
-            
-        #ax[ii].set_yticks([5,10,25,50,100,250,500,1000,2000,4000,6000])
-        ax[ii].get_yaxis().set_major_formatter(ScalarFormatter())
-        
-        xmin, xmax = np.nanmin(data_x), np.nanmax(data_x)
-        
-        ax[ii].set_xlim(xmin-(xmax-xmin)*0.05, xmax+(xmax-xmin)*0.05)
-    nax_fin = ii+1
-    
-    #___________________________________________________________________________
-    # set superior title
-    if 'transect_name' in data[ii][tsidx][vname].attrs.keys():
-        fig.suptitle( data[ii][tsidx][vname].attrs['transect_name'], x=0.5, y=0.925, #y=1.04, 
-                     fontsize=14, fontweight='bold',
-                     horizontalalignment='center', verticalalignment='bottom')
-    
-    #___________________________________________________________________________
-    # delete axes that are not needed
-    #for jj in range(nax_fin, nax): fig.delaxes(ax[jj])
-    for jj in range(ndata, nax): fig.delaxes(ax[jj])
-    if nax != nax_fin-1: ax = ax[0:nax_fin]
-    
-    #___________________________________________________________________________
-    # delete axes that are not needed
-    if do_reffig==False:
-        cbar = fig.colorbar(hp, orientation=cbar_orient, ax=ax, ticks=cinfo['clevel'], 
-                        extendrect=False, extendfrac=None,
-                        drawedges=True, pad=0.025, shrink=1.0)
-        
-        # do formatting of colorbar 
-        cbar = do_cbar_formatting(cbar, do_rescale, cbar_nl, fontsize, cinfo['clevel'])
-        
-        # do labeling of colorbar
-        if cbar_label is None : 
-            if   'short_name' in data[0][tsidx][vname].attrs:
-                cbar_label = data[0][tsidx][ vname ].attrs['short_name']
-            elif 'long_name' in data[0][tsidx][vname].attrs:
-                cbar_label = data[0][tsidx][ vname ].attrs['long_name']
-        if cbar_unit  is None : cbar_label = cbar_label+' ['+data[0][0][ vname ].attrs['units']+']'
-        else                  : cbar_label = cbar_label+' ['+cbar_unit+']'
-        if 'str_ltim' in data[0][tsidx][vname].attrs.keys():
-            cbar_label = cbar_label+'\n'+data[0][tsidx][vname].attrs['str_ltim']
-        cbar.set_label(cbar_label, size=fontsize+2)
-    else:
-        cbar=list()
-        for ii, aux_ax in enumerate(ax): 
-            cbar_label =''
-            if ii==0: 
-                aux_cbar = plt.colorbar(hpall[ii], orientation=cbar_orient, ax=aux_ax, ticks=ref_cinfo['clevel'], 
-                            extendrect=False, extendfrac=None, drawedges=True, pad=0.025, shrink=1.0,)  
-                aux_cbar = do_cbar_formatting(aux_cbar, ref_rescale, cbar_nl, fontsize, ref_cinfo['clevel'])
-            else:     
-                aux_cbar = plt.colorbar(hpall[ii], orientation=cbar_orient, ax=aux_ax, ticks=cinfo['clevel'], 
-                            extendrect=False, extendfrac=None, drawedges=True, pad=0.025, shrink=1.0,)  
-                aux_cbar = do_cbar_formatting(aux_cbar, do_rescale, cbar_nl, fontsize, cinfo['clevel'])
-                #cbar_label ='anom. '
-            # do labeling of colorbar
-            #if cbar_label is None : 
-            if   'short_name' in data[ii][tsidx][vname].attrs:
-                cbar_label = cbar_label+data[ii][tsidx][ vname ].attrs['short_name']
-            elif 'long_name' in data[ii][tsidx][vname].attrs:
-                cbar_label = cbar_label+data[ii][tsidx][ vname ].attrs['long_name']
-            if cbar_unit  is None : cbar_label = cbar_label+' ['+data[ii][tsidx][ vname ].attrs['units']+']'
-            else                  : cbar_label = cbar_label+' ['+cbar_unit+']'
-            if 'str_ltim' in data[ii][tsidx][vname].attrs.keys():
-                cbar_label = cbar_label+'\n'+data[ii][tsidx][vname].attrs['str_ltim']
-            aux_cbar.set_label(cbar_label, size=fontsize+2)
-            cbar.append(aux_cbar)
-    #___________________________________________________________________________
-    # repositioning of axes and colorbar
-    if do_reffig==False:
-        ax, cbar = do_reposition_ax_cbar(ax, cbar, rowlist, collist, pos_fac, pos_gap, 
-                                        title=None, extend=pos_extend)
-    
-        if do_position==True and mesh is not None:
-            cbar_pos = cbar.ax.get_tightbbox(fig.canvas.get_renderer())
-            fsize_dpi= fig.get_size_inches()*fig.dpi
-            cbar_x, cbar_y = cbar_pos.x1/fsize_dpi[0], cbar_pos.y0/fsize_dpi[1]
-            fig, axp = plot_transect_position(mesh, transects[tsidx], fig=fig, 
-                                            do_labels=False, do_path=False, do_title=False, 
-                                            ax_pos=[cbar_x-0.1, cbar_y, 0.40, 0.40]) #[cbar_x-0.05, cbar_y, 0.25, 0.25])
-        
-    plt.show()
-    fig.canvas.draw()
-    #___________________________________________________________________________
-    # save figure based on do_save contains either None or pathname
-    do_savefigure(do_save, fig, dpi=save_dpi)
-    
-    #___________________________________________________________________________
-    return(fig, ax, cbar)
+        :box_list:  None, list (default: None)  list with regional box limitation for index computation box can be: 
 
+                    - ['global']   ... compute global index 
+                    - [shp.Reader] ... index region defined by shapefile 
+                    - [ [lonmin,lonmax,latmin, latmax], boxname] index region defined by rect box 
+                    - [ [ [px1,px2...], [py1,py2,...]], boxname] index region defined by polygon
+                    - [ np.array(2 x npts), boxname] index region defined by polygon
 
-
-#+___PLOT TIME SERIES OF TRANSPORT THROUGH SECTION_____________________________+
-#|                                                                             |
-#+_____________________________________________________________________________+
-def plot_transect_transp_t(tseries_list, input_names, transect, which_cycl=None, 
-                       do_allcycl=False, do_concat=False, str_descript='', str_time='', figsize=[], 
-                       do_save=None, save_dpi=600, do_pltmean=True, do_pltstd=False,
-                       ymaxstep=None, xmaxstep=5, ylabel=None):    
-    
-    if len(figsize)==0: figsize=[13,6.5]
-    if do_concat: figsize[0] = figsize[0]*2
-    fig,ax= plt.figure(figsize=figsize),plt.gca()
-    
-    #___________________________________________________________________________
-    # setup colormap
-    if do_allcycl: 
-        if which_cycl is not None:
-            cmap = categorical_cmap(np.int32(len(tseries_list)/which_cycl), which_cycl, cmap="tab10")
-        else:
-            cmap = categorical_cmap(len(tseries_list), 1, cmap="tab10")
-    else:
-        if do_concat: do_concat=False
-        cmap = categorical_cmap(len(tseries_list), 1, cmap="tab10")
-    
-    #___________________________________________________________________________
-    ii, ii_cycle = 0, 1
-    if which_cycl is None: aux_which_cycl = 1
-    else                 : aux_which_cycl = which_cycl
-    tbnd=[np.inf, -np.inf]
-    #___________________________________________________________________________
-    for ii_ts, (tseries, tname) in enumerate(zip(tseries_list, input_names)):
+        :dlat:      float, (default=0.5) resolution of latitudinal bins
         
-        var  = list(tseries.keys())[0]
-        data = tseries[var]
-        #if tseries.ndim>1: tseries = tseries.squeeze()
+        :diagpath:  str, (default=None), path to diagnostic file only needed when 
+                    w_A weights for area average are not given in the dataset, than 
+                    he will search for the diagnostic file_loader
+                    
+        :do_checkbasin: bool, (default=False) additional plot with selected region/
+                        basin information
+                        
+        :do_compute:    bool (default=False), do xarray dataset compute() at the end
+                        data = data.compute(), creates a new dataobject the original
+                        data object seems to persist
         
-        #_______________________________________________________________________
-        # compute time exis
-        time = data['time']
-        year = np.unique(time.dt.year)
-        totdayperyear   = np.where(time.dt.is_leap_year, 366, 365)
-        time = auxtime = time.dt.year + (time.dt.dayofyear-time.dt.day[0])/totdayperyear
-        
-        #_______________________________________________________________________
-        tlim, tdel = [time[0], time[-1]], time[-1]-time[0]
-        if do_concat: auxtime = auxtime + (tdel+1)*(ii_cycle-1)
-        tbnd[0], tbnd[1] = min([tbnd[0],auxtime[0]]), max([tbnd[1],auxtime[-1]])
-        
-        #_______________________________________________________________________    
-        hp=ax.plot(auxtime, data, linewidth=1.5, label=tname, color=cmap.colors[ii_ts,:], marker='o', markerfacecolor='w', markersize=5, zorder=2)
-        if np.mod(ii_ts+1,aux_which_cycl)==0 or do_allcycl==False:
-            dict_plt = {'markeredgecolor':'k', 'markeredgewidth':0.5, 'color':hp[0].get_color(), 'clip_box':False, 'clip_on':False, 'zorder':3}
-            if do_pltmean: 
-                plt.plot(time[0]-(tdel)*0.0120, data.mean(), marker='<', **dict_plt)
-            if do_pltstd:
-                plt.plot(time[0]-(tdel)*0.015, data.mean()+data.std(), marker='^', markersize=6, **dict_plt)
-                plt.plot(time[0]-(tdel)*0.015, data.mean()-data.std(), marker='v', markersize=6, **dict_plt)
-        #_______________________________________________________________________
-        ii_cycle=ii_cycle+1
-        if ii_cycle>aux_which_cycl: ii_cycle=1
-        
-    #___________________________________________________________________________
-    ax.legend(shadow=True, fancybox=True, frameon=True, #mode='None', 
-              bbox_to_anchor=(1.04,0.5), loc="center left", borderaxespad=0)
-              #bbox_to_anchor=(1.04, 1.0), ncol=1) #loc='lower right', 
-    ax.set_xlabel('Time [years]',fontsize=12)
-    if ylabel is None: ax.set_ylabel('{:s} in [Sv]'.format('Transport'),fontsize=12)
-    else             : ax.set_ylabel('{:s} in [Sv]'.format(ylabel),fontsize=12)
-    ax.set_title(transect['Name'], fontsize=12, fontweight='bold')
+        :do_load:       bool (default=True), do xarray dataset load() at the end
+                        data = data.load(), applies all operations to the original
+                        dataset
+                        
+        :do_persist:    bool (default=False), do xarray dataset persist() at the end
+                        data = data.persist(), keeps the dataset as dask array, keeps
+                        the chunking    
+                      
+        :do_info:       bool (defalt=False), print variable info at the end 
+                      
+    Returns:
     
-    #___________________________________________________________________________
-    if year.size<=xmaxstep: xmaxstep=1
-    if do_concat: xmaxstep=20
-    xmajor_locator = MultipleLocator(base=xmaxstep) # this locator puts ticks at regular intervals
-    ax.xaxis.set_major_locator(xmajor_locator)
-    
-    if ymaxstep is not None: 
-        ymajor_locator = MultipleLocator(base=ymaxstep) # this locator puts ticks at regular intervals
-        ax.yaxis.set_major_locator(ymajor_locator)
-    
-    if not do_concat:
-        xminor_locator = AutoMinorLocator(5)
-        yminor_locator = AutoMinorLocator(4)
-        ax.yaxis.set_minor_locator(yminor_locator)
-        ax.xaxis.set_minor_locator(xminor_locator)
-    
-    plt.grid(which='major')
-    if not do_concat:
-        #plt.xlim(time[0]-(time[-1]-time[0])*0.015,time[-1]+(time[-1]-time[0])*0.015)
-        plt.xlim(tbnd[0]-(tbnd[1]-tbnd[0])*0.015,tbnd[1]+(tbnd[1]-tbnd[0])*0.015)    
-    else:    
-        #plt.xlim(time[0]-(time[-1]-time[0])*0.015,time[-1]+(time[-1]-time[0]+1)*(which_cycl-1)+(time[-1]-time[0])*0.015)    
-        plt.xlim(tbnd[0]-(tbnd[1]-tbnd[0])*0.015,tbnd[1]+(tbnd[1]-tbnd[0])*0.015)    
-    #___________________________________________________________________________
-    plt.show()
-    fig.canvas.draw()
-    
-    #___________________________________________________________________________
-    # save figure based on do_save contains either None or pathname
-    do_savefigure(do_save, fig, dpi=save_dpi)
-    
-    #___________________________________________________________________________
-    return(fig,ax)
-
-
-
-#+___COMPUTE ZONAL MEAN SECTION BASED ON BINNING_______________________________+
-#|                                                                             |
-#+_____________________________________________________________________________+
-def load_zmeantransect_fesom2(mesh, data, box_list, dlat=0.5, boxname=None, do_harithm='mean', 
-                              do_outputidx=False, diagpath=None, 
-                              do_info=False, do_smooth=True, do_checkbasin=False, 
-                              do_compute=False, do_load=True, do_persist=False, 
-                                **kwargs,):
-    
+        :index_list:    list with xarray dataset of zonal mean array
+    ____________________________________________________________________________
+    """
     #___________________________________________________________________________
     # str_anod    = ''
     index_list  = []
-    idxin_list  = []
     cnt         = 0
     
     #___________________________________________________________________________
@@ -1728,6 +1589,8 @@ def load_zmeantransect_fesom2(mesh, data, box_list, dlat=0.5, boxname=None, do_h
             str_name = box.shapeName.split('/')[-1].replace('_',' ')
             data_zm[vname].attrs['transect_name'] = '{} zonal mean'.format(str_name.lower())
         
+        # for the choice of vertical plotting mode
+        data_zm.attrs['proj'] = 'index+depth+xy'
         #_______________________________________________________________________
         if do_compute : data_zm = data_zm.compute() 
         if do_load    : data_zm = data_zm.load()
@@ -1741,310 +1604,29 @@ def load_zmeantransect_fesom2(mesh, data, box_list, dlat=0.5, boxname=None, do_h
         cnt = cnt + 1
         
     #___________________________________________________________________________
-    if do_outputidx:
-        return(index_list, idxin_list)
-    else:
-        return(index_list)
+    return(index_list)
 
 
-
-#+___COMPUTE ZONAL MEAN SECTION________________________________________________+
-#|                                                                             |
-#+_____________________________________________________________________________+
-def plot_zmeantransects(data, bidx=0, figsize=[12, 6], 
-              n_rc=[1, 1], do_grid=True, cinfo=None, do_rescale=False,
-              do_reffig=False, ref_cinfo=None, ref_rescale=False,
-              cbar_nl=8, cbar_orient='vertical', cbar_label=None, cbar_unit=None,
-              do_bottom=True, max_dep=[], color_bot=[0.6, 0.6, 0.6], 
-              pos_fac=1.0, pos_gap=[0.02, 0.02], do_save=None, save_dpi=600, 
-              do_contour=True, do_clabel=False, title='descript', do_ylog=True,
-              pos_extend=[0.05, 0.08, 0.95,0.95], do_smooth=False, 
-            ):
-    #____________________________________________________________________________
-    fontsize = 12
-    
-    #___________________________________________________________________________
-    # make matrix with row colum index to know where to put labels
-    rowlist = np.zeros((n_rc[0], n_rc[1]))
-    collist = np.zeros((n_rc[0], n_rc[1]))       
-    for ii in range(0,n_rc[0]): rowlist[ii,:]=ii
-    for ii in range(0,n_rc[1]): collist[:,ii]=ii
-    rowlist = rowlist.flatten()
-    collist = collist.flatten()
-    
-    #___________________________________________________________________________    
-    # create figure and axes
-    fig, ax = plt.subplots( n_rc[0],n_rc[1], figsize=figsize, 
-                            gridspec_kw=dict(left=0.1, bottom=0.1, right=0.9, top=0.9, wspace=0.05, hspace=0.05,),
-                            constrained_layout=False, sharex=True, sharey=True)
-    
-    #___________________________________________________________________________    
-    # flatt axes if there are more than 1
-    if isinstance(ax, np.ndarray): ax = ax.flatten()
-    else:                          ax = [ax] 
-    nax = len(ax)
-     
-    #___________________________________________________________________________
-    # data must be list filled with xarray data
-    if not isinstance(data  , list): data  = [data]
-    ndata = len(data) 
-    
-    #___________________________________________________________________________
-    # set up color info 
-    if do_reffig:
-        ref_cinfo = do_setupcinfo(ref_cinfo, [data[0]], ref_rescale, do_index=True, boxidx=bidx)
-        cinfo     = do_setupcinfo(cinfo    , data[1:] , do_rescale , do_index=True, boxidx=bidx)
-    else:    
-        cinfo     = do_setupcinfo(cinfo, data, do_rescale, do_index=True, boxidx=bidx)
-
-    #_______________________________________________________________________
-    # setup normalization log10, symetric log10, None
-    which_norm = do_compute_scalingnorm(cinfo, do_rescale)
-    if do_reffig:
-        which_norm_ref = do_compute_scalingnorm(ref_cinfo, ref_rescale)
-    
-    #___________________________________________________________________________
-    # loop over axes
-    hpall=list()
-    for ii in range(0,ndata):
-        
-        #_______________________________________________________________________
-        # limit data to color range
-        vname= list(data[ii][bidx].keys())[0]
-        data_plot = data[ii][bidx][vname].values.copy()
-        
-        #_______________________________________________________________________
-        # setup x-coorod and y-coord
-        lat  , str_xlabel = data[ii][bidx]['lat'].values   , 'Latitude [deg]'
-        depth, str_ylabel = data[ii][bidx]['depth'].values , 'Depth [m]'
-        depth = np.abs(depth)
-        
-        #_______________________________________________________________________
-        if do_reffig: 
-            if ii==0: cinfo_plot, which_norm_plot = ref_cinfo, which_norm_ref
-            else    : cinfo_plot, which_norm_plot = cinfo    , which_norm
-        else        : cinfo_plot, which_norm_plot = cinfo    , which_norm
-        
-        #_______________________________________________________________________
-        # be sure there are no holes
-        data_plot[data_plot<cinfo_plot['clevel'][ 0]] = cinfo_plot['clevel'][ 0]+np.finfo(np.float32).eps
-        data_plot[data_plot>cinfo_plot['clevel'][-1]] = cinfo_plot['clevel'][-1]-np.finfo(np.float32).eps
-        
-        #___________________________________________________________________________
-        # apply horizontal smoothing filter
-        if do_smooth: 
-            from scipy.signal import convolve2d
-            data_plotorig = data_plot.copy()
-            filt=np.array([1,2,3,2,1])
-            #filt=np.array([1,2,1])
-            filt=filt[np.newaxis,:]
-            filt=filt/np.sum(filt.flatten())
-            is_nanbf = np.isnan(data_plot)
-            data_plot = convolve2d(data_plot, filt, mode='same', boundary='symm') 
-            is_nanaf = np.isnan(data_plot)
-            
-            idx= ((is_nanbf==False) & (is_nanaf==True))
-            data_plot[idx] = data_plotorig[idx]
-            del(is_nanbf, is_nanaf, filt)
-            
-        #_______________________________________________________________________
-        # plot zonal mean data
-        hp=ax[ii].contourf(lat, depth, data_plot, levels=cinfo_plot['clevel'], extend='both', cmap=cinfo_plot['cmap'],
-                           norm = which_norm)
-        hpall.append(hp) 
-        
-        if do_contour: 
-            tickl    = cinfo_plot['clevel']
-            ncbar_l  = len(tickl)
-            idx_cref = np.where(cinfo_plot['clevel']==cinfo_plot['cref'])[0]
-            #idx_cref = np.asscalar(idx_cref)
-            idx_cref = idx_cref.item()
-            nstep    = ncbar_l/cbar_nl
-            nstep    = np.max([np.int32(np.floor(nstep)),1])
-            
-            idx = np.arange(0, ncbar_l, 1)
-            idxb = np.ones((ncbar_l,), dtype=bool)                
-            idxb[idx_cref::nstep]  = False
-            idxb[idx_cref::-nstep] = False
-            idx_yes = idx[idxb==False]
-            cont=ax[ii].contour(lat, depth, data_plot, levels=cinfo_plot['clevel'][idx_yes], colors='k', linewidths=[0.5],
-                                norm = which_norm) #linewidths=[0.5,0.25])
-            
-            if do_clabel: 
-                ax[ii].clabel(cont, cont.levels, inline=1, inline_spacing=1, fontsize=6, fmt='%1.1f',zorder=1)
-                #ax[ii].clabel(cont, cont.levels[np.where(cont.levels!=cinfo_plot['cref'])], 
-                            #inline=1, inline_spacing=1, fontsize=6, fmt='%1.1f Sv')
-            
-        #___________________________________________________________________
-        # plot bottom patch   
-        if do_bottom:
-            aux = np.ones(data_plot.shape,dtype='int16')
-            aux[np.isnan(data_plot)]=0
-            aux = aux.sum(axis=0)
-            aux[aux!=0]=aux[aux!=0]-1
-            bottom = depth[aux]
-            # smooth bottom patch
-            filt=np.array([1,2,3,2,1]) #np.array([1,2,1])
-            filt=filt/np.sum(filt)
-            aux = np.concatenate( (np.ones((filt.size,))*bottom[0],bottom,np.ones((filt.size,))*bottom[-1] ) )
-            aux = np.convolve(aux,filt,mode='same')
-            bottom = aux[filt.size:-filt.size]
-            bottom = np.maximum(bottom, data[ii][bidx]['bottom'].values)
-            
-            ax[ii].fill_between(lat, bottom, depth[-1],color=[0.5,0.5,0.5], zorder=2)#,alpha=0.95)
-            ax[ii].plot(lat, bottom, color='k')
-        
-        #_______________________________________________________________________
-        # fix color range
-        for im in ax[ii].get_images(): im.set_clim(cinfo_plot['clevel'][ 0], cinfo_plot['clevel'][-1])
-        
-        #_______________________________________________________________________
-        # plot grid lines 
-        if do_grid: ax[ii].grid(color='k', linestyle='-', linewidth=0.25,alpha=1.0)
-        
-        #_______________________________________________________________________
-        # set description string plus x/y labels
-        if title is not None: 
-            txtx, txty = lat[0]+(lat[-1]-lat[0])*0.015, depth[-1]-(depth[-1]-depth[0])*0.015
-            if   isinstance(title,str) : 
-                # if title string is 'descript' than use descript attribute from 
-                # data to set plot title 
-                if title=='descript' and ('descript' in data[ii][bidx][vname].attrs.keys() ):
-                    txts = data[ii][bidx][vname].attrs['descript']
-                else:
-                    txts = title
-            # is title list of string        
-            elif isinstance(title,list):   
-                txts = title[ii]
-            ax[ii].text(txtx, txty, txts, fontsize=12, fontweight='bold', horizontalalignment='left')
-        
-        #_______________________________________________________________________
-        # set x/y label
-        if collist[ii]==0        : ax[ii].set_ylabel(str_ylabel, fontsize=12)
-        if rowlist[ii]==n_rc[0]-1: ax[ii].set_xlabel(str_xlabel, fontsize=12)
-        
-        #_______________________________________________________________________
-        if do_ylog: 
-            if depth[0]==0: ax[ii].set_ylim(depth[1],depth[-1])
-            else          : ax[ii].set_ylim(depth[0],depth[-1])
-            ax[ii].set_yscale('function', functions=(forward, inverse))
-            yticklog = np.array([10,25,50,100,250,500,1000,2000,4000,6000])
-            ax[ii].set_yticks(yticklog)
-            ax[ii].invert_yaxis()
-            ax[ii].grid(True,which='major')
-            
-        else:
-            ax[ii].set_ylim(depth[0],depth[-1])
-            ax[ii].invert_yaxis()
-            ax[ii].grid(True,which='major')
-        
-        #ax[ii].set_yscale('log')
-        #ax[ii].set_yticks([5,10,25,50,100,250,500,1000,2000,4000,6000])
-        ax[ii].get_yaxis().set_major_formatter(ScalarFormatter())
-        
-    nax_fin = ii+1
-    
-    #___________________________________________________________________________
-    # set superior title
-    vname = list(data[ii][bidx].keys())[0]
-    if 'transect_name' in data[ii][bidx][vname].attrs.keys():
-        htitle = fig.suptitle( data[ii][bidx][vname].attrs['transect_name'], fontsize=16, #, x=0.0, y=1.04
-                               horizontalalignment='right', verticalalignment='bottom')
-        #htitle=fig.suptitle( 'sdfasfpafagjagnlgnjklasgnjklaf', fontsize=16, ha='right')
-        htitle.set_position([0.5, 0.95])
-
-    #___________________________________________________________________________
-    # delete axes that are not needed
-    #for jj in range(nax_fin, nax): fig.delaxes(ax[jj])
-    for jj in range(ndata, nax): fig.delaxes(ax[jj])
-    if nax != nax_fin-1: ax = ax[0:nax_fin]
-    
-    #___________________________________________________________________________
-    # delete axes that are not needed
-    if do_reffig==False:
-        cbar = fig.colorbar(hp, orientation=cbar_orient, ax=ax, ticks=cinfo['clevel'], 
-                        extendrect=False, extendfrac=None,
-                        drawedges=True, pad=0.025, shrink=1.0)
-        
-        # do formatting of colorbar 
-        cbar = do_cbar_formatting(cbar, do_rescale, cbar_nl, fontsize, cinfo['clevel'])
-        
-        # do labeling of colorbar
-        vname = list(data[0][bidx].keys())[0]
-        if cbar_label is None : 
-            if 'long_name' in data[0][bidx][vname].attrs:
-                cbar_label = data[0][bidx][ vname ].attrs['long_name']
-            elif   'short_name' in data[0][bidx][vname].attrs:
-                cbar_label = data[0][bidx][ vname ].attrs['short_name']
-                
-        if cbar_unit  is None : cbar_label = cbar_label+' ['+data[0][0][ vname ].attrs['units']+']'
-        else                  : cbar_label = cbar_label+' ['+cbar_unit+']'
-        if 'str_ltim' in data[0][bidx][vname].attrs.keys():
-            cbar_label = cbar_label+'\n'+data[0][bidx][vname].attrs['str_ltim']
-            
-        # eliminate possible double slashes in the string and replace with single string 
-        # something like \\n --> \n
-        cbar_label = cbar_label.encode().decode('unicode_escape')
-        
-        cbar.set_label(cbar_label, size=fontsize+2)
-    else:
-        cbar=list()
-        for ii, aux_ax in enumerate(ax): 
-            cbar_label =''
-            if ii==0: 
-                aux_cbar = plt.colorbar(hpall[ii], orientation=cbar_orient, ax=aux_ax, ticks=ref_cinfo['clevel'], 
-                            extendrect=False, extendfrac=None, drawedges=True, pad=0.025, shrink=1.0,)  
-                aux_cbar = do_cbar_formatting(aux_cbar, ref_rescale, cbar_nl, fontsize, ref_cinfo['clevel'])
-            else:     
-                aux_cbar = plt.colorbar(hpall[ii], orientation=cbar_orient, ax=aux_ax, ticks=cinfo['clevel'], 
-                            extendrect=False, extendfrac=None, drawedges=True, pad=0.025, shrink=1.0,)  
-                aux_cbar = do_cbar_formatting(aux_cbar, do_rescale, cbar_nl, fontsize, cinfo['clevel'])
-                #cbar_label ='anom. '
-            if 'long_name' in data[ii][bidx][vname].attrs:
-                cbar_label = cbar_label+data[ii][bidx][ vname ].attrs['long_name']
-            elif   'short_name' in data[ii][bidx][vname].attrs:
-                cbar_label = cbar_label+data[ii][bidx][ vname ].attrs['short_name']
-            if cbar_unit  is None : cbar_label = cbar_label+' ['+data[ii][0][ vname ].attrs['units']+']'
-            else                  : cbar_label = cbar_label+' ['+cbar_unit+']'
-            if 'str_ltim' in data[ii][bidx][vname].attrs.keys():
-                cbar_label = cbar_label+'\n'+data[ii][0][vname].attrs['str_ltim']
-            # eliminate possible double slashes in the string and replace with single string 
-            # something like \\n --> \n
-            cbar_label = cbar_label.encode().decode('unicode_escape')
-            
-            aux_cbar.set_label(cbar_label, size=fontsize+2)
-            cbar.append(aux_cbar)
-            
-    #___________________________________________________________________________
-    # repositioning of axes and colorbar
-    if do_reffig==False:
-        ax, cbar = do_reposition_ax_cbar(ax, cbar, rowlist, collist, pos_fac, pos_gap, 
-                                        title=None, extend=pos_extend)
-    
-    plt.show()
-    fig.canvas.draw()
-    
-    #___________________________________________________________________________
-    # save figure based on do_save contains either None or pathname
-    do_savefigure(do_save, fig, dpi=save_dpi)
-    
-    #___________________________________________________________________________
-    return(fig, ax, cbar)
-
-
-
-# ___DO ANOMALY________________________________________________________________
-#| compute anomaly between two xarray Datasets                                 |
-#| ___INPUT_________________________________________________________________   |
-#| data1        :   xarray dataset object                                      |
-#| data2        :   xarray dataset object                                      |
-#| ___RETURNS_______________________________________________________________   |
-#| anom         :   xarray dataset object, data1-data2                         |
-#|_____________________________________________________________________________|
+#
+#
+#____DO ANOMALY_________________________________________________________________
 def do_transect_anomaly(index1,index2):
+    """
+    --> compute anomaly between two transect list xarray Datasets
     
+    Parameters:
+    
+        :index1:   list with transect xarray dataset object
+
+        :index2:   list with transect xarray dataset object
+
+    Returns:
+    
+        :anom:   list with  transect xarray dataset object, data1-data2
+
+    ____________________________________________________________________________
+    """
     anom_index = list()
-    
     #___________________________________________________________________________
     for idx1,idx2 in zip(index1, index2):
     
@@ -2065,7 +1647,9 @@ def do_transect_anomaly(index1,index2):
             for key in attrs_data1.keys():
                 if (key in attrs_data1.keys()) and (key in attrs_data2.keys()):
                     if key in ['long_name']:
-                        anom_idx[vname].attrs[key] = 'anomalous '+anom_idx[vname].attrs[key] 
+                        anom_idx[vname].attrs[key] = 'anom. '+anom_idx[vname].attrs[key].capitalize() 
+                    elif key in ['short_name']:
+                        anom_idx[vname].attrs[key] = 'anom. '+anom_idx[vname].attrs[key]        
                     elif key in ['units',]: 
                         continue
                     elif key in ['descript']: 

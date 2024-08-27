@@ -13,6 +13,7 @@ with open('HISTORY.rst') as history_file:
 
 requirements = [
     'cartopy',
+    'bokeh!=3.0.*,>=2.4.2',
     'cmocean',
     'dask',
     'distributed',
@@ -20,9 +21,11 @@ requirements = [
     'joblib',
     'jupyter',
     'jupyterlab<4.0',
+    'jupyter_lsp',
     'matplotlib',
-    #'pickle5',
     "pickle5; python_version<'3.9'",
+    'libnetcdf',
+    'hdf5plugin', 
     'netCDF4',
     'numba',
     'numpy',
@@ -30,6 +33,7 @@ requirements = [
     'geopandas',
     'scipy',
     'seawater',
+    'gsw',
     'shapely',
     'xarray',
     'pyfesom2',
@@ -39,12 +43,12 @@ requirements = [
     'black',
     'jinja2',
     'pyyaml',
-    'pyvista[all,jupyter,trame]',
+    'pyvista[all]', #,jupyter,trame]',
     'vtk',
     'ipyvtklink',
     'imageio[ffmpeg]', 
     'ipympl',
-    'ffmpeg-python'
+    'ffmpeg-python',
 ]
 
 setup_requirements = ['pytest-runner']
@@ -59,12 +63,12 @@ setup(
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
-        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
     ],
     entry_points={
         'console_scripts': [
-            'diagrun=tripyview.sub_diagrun:diagrun',  # command=package.module:function
+            'tripyrun=tripyview.sub_tripyrun:tripyrun',  # command=package.module:function
         ]
     },
     description='FESOM2 tools',
@@ -81,7 +85,7 @@ setup(
     test_suite='tests',
     tests_require=test_requirements,
     url='https://github.com/patrickscholz/tripyview',
-    version='0.2.0',
+    version='0.3.0',
     zip_safe=False,
 )
 

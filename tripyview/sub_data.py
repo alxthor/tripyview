@@ -6,72 +6,151 @@ import warnings
 import xarray as xr
 import netCDF4 as nc
 import seawater as sw
+#import gsw as gsw
 from .sub_mesh import *
 import warnings
+
+
 #xr.set_options(enable_cftimeindex=False)
 # ___LOAD FESOM2 DATA INTO XARRAY DATASET CLASS________________________________
 #|                                                                             |
 #|           *** LOAD FESOM2 DATA INTO --> XARRAY DATASET CLASS ***            |
 #|                                                                             |
 #|_____________________________________________________________________________|
-def load_data_fesom2(mesh, datapath, vname=None, year=None, mon=None, day=None, 
-                     record=None, depth=None, depidx=False, do_nan=True, 
-                     do_tarithm='mean', do_zarithm='mean', do_ie2n=True,
-                     do_vecrot=True, do_filename=None, do_file='run', do_info=True, 
-                     descript='', runid='fesom', do_showtime=False, do_prec='float32', 
-                     do_zweight=False, do_hweight=True, do_f14cmip6=False, 
-                     do_compute=False, do_load=True, do_persist=False, 
-                     chunks={'time' :'auto', 'elem':'auto', 'nod2':'auto', \
-                             'edg_n':'auto', 'nz'  :'auto', 'nz1' :'auto', \
-                             'ndens':'auto'},
+def load_data_fesom2(mesh, 
+                     datapath, 
+                     vname          = None      , 
+                     year           = None      , 
+                     mon            = None      , 
+                     day            = None      , 
+                     record         = None      , 
+                     depth          = None      , 
+                     depidx         = False     , 
+                     do_tarithm     = 'mean'    , 
+                     do_zarithm     = 'mean'    , 
+                     do_zweight     = False     , 
+                     do_hweight     = True      , 
+                     do_nan         = True      , 
+                     do_ie2n        = True      ,
+                     do_vecrot      = True      , 
+                     do_filename    = None      , 
+                     do_file        = 'run'     , 
+                     descript       = ''        , 
+                     runid          = 'fesom'   , 
+                     do_prec        = 'float32' , 
+                     do_f14cmip6    = False     , 
+                     do_compute     = False     , 
+                     do_load        = True      , 
+                     do_persist     = False     , 
+                     chunks         = { 'time' :'auto', 'elem':'auto', 'nod2':'auto', \
+                                        'edg_n':'auto', 'nz'  :'auto', 'nz1' :'auto', \
+                                        'ndens':'auto'},
+                     do_showtime    = False     , 
+                     do_info        = True      , 
                      **kwargs):
     """
-    ---> load FESOM2 data:
-    ___INPUT:___________________________________________________________________
-    mesh        :   fesom2 mesh object,  with all mesh information 
-    datapath    :   str, path that leads to the FESOM2 data
-    vname       :   str, (default: None), variable name that should be loaded
-    year        :   int, list, np.array, range, default: None, single year or 
-                    list/array of years whos file should be opened
-    mon         :   list, (default=None), specific month that should be selected 
-                    from dataset. If mon selection leads to no data selection, 
-                    because data maybe annual, selection is set to mon=None
-    day         :   list, (default=None), same as mon but for day
-    record      :   int,list, (default=None), load specific record number from 
-                    dataset. Overwrites effect of mon and sel_day
-    depth       :   int, list, np.array, range (default=None). Select single 
-                    depth level that will be interpolated or select list of depth 
-                    levels that will be interpolated and vertically averaged. If 
-                    None all vertical layers in data are loaded
-    depidx      :   bool, (default:False) if depth is int and depidx=True, depth
-                    index is selected that is closest to depth. No interpolation 
-                    will be done
-    do_nan      :   bool (default=True), do replace bottom fill values with nan                
-    do_tarithm  :   str (default='mean') do time arithmetic on time selection
-                    option are: None, 'None', 'mean', 'median', 'std', 'var', 'max'
-                    'min', 'sum'
-    do_zarithm  :   str (default='mean') do arithmetic on selected vertical layers
-                    options are: None, 'None', 'mean', 'max', 'min', 'sum'
-    do_ie2n     :   bool (default=True), if data are on elements automatically 
-                    interpolates them to vertices --> easier to plot 
-    do_vecrot   :   bool (default=True), if vector data are loaded e.g. 
-                    vname='vec+u+v' rotates the from rotated frame (in which 
-                    they are stored) to geo coordinates
-    do_filename :   str, (default=None) load this specific filname string instead
-                    of path selection via datapath and year
-    do_file     :   str, (default='run'), which data should be loaded options are:
-                    'run'-fesom2 simulation files should be load, 'restart_oce'-
-                    fesom2 ocean restart file should be loaded, 'restart_ice'-
-                    fesom2 ice restart file should be loaded and 'blowup'- fesom2
-                    ocean blowup file will be loaded
-    do_info     :   bool (defalt=True), print variable info at the end 
-    do_compute  :   bool (default=True), do xarray dataset compute() at the end
-                    data = data.compute()
-    descript    :   str (default=''), string to describe dataset is written into 
-                    variable attributes
-    runid       :   str (default='fesom'), runid of loaded data                
-    ___RETURNS:_________________________________________________________________
-    data        :   object, returns xarray dataset object
+    --> general loading of 
+    
+    Parameters:
+    
+        :mesh:          fesom2 tripyview mesh object,  with all mesh information 
+        
+        :datapath:      str, path that leads to the FESOM2 data
+        
+        :vname:         str, (default: None), variable name that should be loaded
+        
+        :year:          int, list, np.array, range, default: None, single year or 
+                        list/array of years whos file should be opened
+        
+        :mon:           list, (default=None), specific month that should be selected 
+                        from dataset. If mon selection leads to no data selection, 
+                        because data maybe annual, selection is set to mon=None
+        
+        :day:           list, (default=None), same as mon but for day
+        
+        :record:        int,list, (default=None), load specific record number from 
+                        dataset. Overwrites effect of mon and sel_day
+        
+        :depth:         int, list, np.array, range (default=None). Select single 
+                        depth level that will be interpolated or select list of depth 
+                        levels that will be interpolated and vertically averaged. If 
+                        None all vertical layers in data are loaded
+        
+        :depidx:        bool, (default:False) if depth is int and depidx=True, depth
+                        index is selected that is closest to depth. No interpolation 
+                        will be done
+        
+        :do_tarithm:    str (default='mean') do time arithmetic on time selection
+                        option are: None, 'None', 'mean', 'median', 'std', 'var', 'max'
+                        'min', 'sum'
+        
+        :do_zarithm:    str (default='mean') do arithmetic on selected vertical layers
+                        options are: None, 'None', 'mean', 'max', 'min', 'sum'
+        
+        :do_zweight:    bool, (defaull=False) store weights for vertical weigthed 
+                        averages within the dataset
+        
+        :do_hweight:    bool, (default=True), store weightsd for weighted horizontal
+                        averages
+        
+        :do_nan:        bool (default=True), do replace bottom fill values with nan                
+        
+        :do_ie2n:       bool (default=True), if data are on elements automatically 
+                        interpolates them to vertices --> easier to plot 
+        
+        :do_vecrot:     bool (default=True), if vector data are loaded e.g. 
+                        vname='vec+u+v' rotates the from rotated frame (in which 
+                        they are stored) to geo coordinates
+        
+        :do_filename:   str, (default=None) load this specific filname string instead
+                        of path selection via datapath and year
+        
+        :do_file:       str, (default='run'), which data should be loaded options are
+        
+                        - 'run' ... fesom2 simulation files should be load, 
+                        - 'restart_oce' ... fesom2 ocean restart file should be loaded, 
+                        - 'restart_ice' ... fesom2 ice restart file should be loaded 
+                        - 'blowup'      ... fesom2 ocean blowup file will be loaded
+        
+        :descript:      str (default=''), string to describe dataset is written into 
+                        variable attributes
+        
+        :runid:         str (default='fesom'), runid of loaded data        
+        
+        :do_prec:       str, (default='float32') which precision is used for the 
+                        loading of the data
+                        
+        :do_f14cmip6:   bool, (default=False), Set to true when loading cmorized 
+                        FESOM1.4 CMIP6 data when computing AMOC
+        
+        :do_compute:    bool (default=False), do xarray dataset compute() at the end
+                        data = data.compute(), creates a new dataobject the original
+                        data object seems to persist
+        
+        :do_load:       bool (default=True), do xarray dataset load() at the end
+                        data = data.load(), applies all operations to the original
+                        dataset
+                        
+        :do_persist:    bool (default=False), do xarray dataset persist() at the end
+                        data = data.persist(), keeps the dataset as dask array, keeps
+                        the chunking   
+                        
+        :chunks:        dict(), (default=dict({'time':'auto', ...})) dictionary 
+                        with chunksize of specific dimensions. By default setted 
+                        to auto but can also be setted to specific value. In my 
+                        observation it revealed that the loading of data was a factor 2-3
+                        faster with auto-chunking but this might has its limitation
+                        for very large meshes 
+                        
+        :do_showtime:   bool, (default=False) show time information stored in dataset
+        
+        :do_info:       bool (defalt=True), print variable info at the end 
+        
+    Returns:
+    
+        :data:          object, returns xarray dataset object
+        
+    ____________________________________________________________________________
     """
     #___________________________________________________________________________
     # default values 
@@ -84,6 +163,17 @@ def load_data_fesom2(mesh, datapath, vname=None, year=None, mon=None, day=None,
     str_ldep, str_ltim = '', '' # string for labels
     str_lsave = ''    
     xr.set_options(keep_attrs=True)
+    
+    #___________________________________________________________________________
+    # Related to bug especially on albedo netcdf-c not being threat save since netcdf1.6.1: 
+    # https://github.com/pydata/xarray/issues/7079
+    # https://github.com/xCDAT/xcdat/issues/561
+    # https://forum.access-hive.org.au/t/netcdf-not-a-valid-id-errors/389/24
+    import dask
+    import distributed
+    if distributed.worker_client() is None:
+        dask.config.set(scheduler="single-threaded")
+
     #___________________________________________________________________________
     # Create xarray dataset object with all grid information 
     if vname in ['topography','zcoord', 
@@ -130,7 +220,7 @@ def load_data_fesom2(mesh, datapath, vname=None, year=None, mon=None, day=None,
         # store vertice resolution in data               
         elif any(x in vname for x in ['nresol', 'n_resol', 'resolution', 'resol']):
             if len(mesh.n_resol)==0: mesh=mesh.compute_n_resol()
-            data['nresol'] = ("nod2", mesh.n_resol[0,:]/1000)
+            data['nresol'] = ("nod2", mesh.n_resol/1000)
             data['nresol'].attrs["description"]='Resolution'
             data['nresol'].attrs["descript"   ]='Resolution'
             data['nresol'].attrs["long_name"  ]='Resolution'
@@ -191,6 +281,7 @@ def load_data_fesom2(mesh, datapath, vname=None, year=None, mon=None, day=None,
         
     #___________________________________________________________________________
     # create path name list that needs to be loaded
+    if '~/' in datapath: datapath = os.path.abspath(os.path.expanduser(datapath))
     pathlist, str_ltim = do_pathlist(year, datapath, do_filename, do_file, vname, runid)
     if len(pathlist)==0: 
         data = None
@@ -310,7 +401,7 @@ def load_data_fesom2(mesh, datapath, vname=None, year=None, mon=None, day=None,
         
         #_______________________________________________________________________
         if do_pdens: 
-            data, vname = do_potential_desnsity(data, do_pdens, vname, vname2, vname_tmp)
+            data, vname = do_potential_density(data, do_pdens, vname, vname2, vname_tmp)
             
         #_______________________________________________________________________
         # do vertical interpolation and summation over interpolated levels 
@@ -357,7 +448,7 @@ def load_data_fesom2(mesh, datapath, vname=None, year=None, mon=None, day=None,
     #___________________________________________________________________________
     # compute potential density if do_pdens=True    
     if do_pdens and depth is None: 
-        data, vname = do_potential_desnsity(data, do_pdens, vname, vname2, vname_tmp)
+        data, vname = do_potential_density(data, do_pdens, vname, vname2, vname_tmp)
     
     #___________________________________________________________________________
     # interpolate from elements to node
@@ -409,46 +500,70 @@ def load_data_fesom2(mesh, datapath, vname=None, year=None, mon=None, day=None,
     #___________________________________________________________________________
 
 
-    
+
+#
+#    
 # ___CREATE FILENAME MASK FOR: RUN, RESTART AND BLOWUP FILES___________________
-#| contains filename mask to distinguish between run, restart and blowup file  |
-#| that can be loaded                                                          |
-#| ___INPUT_________________________________________________________________   |
-#| do_file      :   str, which kind of file should be loaded, 'run',           |
-#|                  'restart_oce', 'restart_ice', 'blowup'                     |
-#| vname        :   str, name of variable                                      |
-#| runid        :   str, runid of simulation usually 'fesom'                   |
-#| year         :   int, year number that should be loaded                     |
-#| ___RETURNS_______________________________________________________________   |
-#| fname        :   str, filename                                              |
-#|_____________________________________________________________________________| 
 def do_fnamemask(do_file,vname,runid,year):
-    #___________________________________________________________________________
-    if   do_file=='run'        : fname = '{}.{}.{}.nc'.format(vname,runid,year)
+    """
+    --> contains filename mask to distinguish between run, restart and blowup file
+    that can be loaded    
+    
+    Parameters:
+    
+        :do_file:   str, which kind of file should be loaded, 'run','restart_oce', 'restart_ice', 'blowup'
+        
+        :vname:     str, name of variable 
+        
+        :runid:     str, runid of simulation usually 'fesom'
+        
+        :year:      int, year number that should be loaded
+    
+    Returns:
+    
+        :fname:   str, filename
+    
+    ____________________________________________________________________________
+    """
+    if   do_file=='run'        : fname = '{}.{}.{}.nc'.format(   vname,runid,year)
     elif do_file=='restart_oce': fname = '{}.{}.oce.restart.nc'.format(runid,year)
     elif do_file=='restart_ice': fname = '{}.{}.ice.restart.nc'.format(runid,year)
-    elif do_file=='blowup'     : fname = '{}.{}.oce.blowup.nc'.format(runid,year)
+    elif do_file=='blowup'     : fname = '{}.{}.oce.blowup.nc'.format( runid,year)
     
     #___________________________________________________________________________
     return(fname)
 
 
 
+#
+#
 # ___CREATE PATHLIST TO DATAFILES______________________________________________
-#| create path/file list of data that should be loaded                         |
-#| ___INPUT_________________________________________________________________   |
-#| year         :   int, list, np.array, range of years that should be loaded  |
-#| datapath     :   str, path that leads to the FESOM2 data                    |
-#| do_filename  :   str, (default=None) load this specific filname string      |
-#|                  instead                                                    |
-#| fo_file      :   str, which kind of file should be loaded, 'run',           |
-#|                  'restart_oce', 'restart_ice', 'blowup'                     |
-#| vname        :   str, name of variable                                      |
-#| runid        :   str, runid of simulation usually 'fesom'                   |
-#| ___RETURNS_______________________________________________________________   |
-#| pathlist     :   str, list                                                  |
-#|_____________________________________________________________________________| 
 def do_pathlist(year, datapath, do_filename, do_file, vname, runid):
+    """
+    --> create path/file list of data that should be loaded 
+    
+    Parameters:
+    
+        :year:          int, list, np.array, range of years that should be loaded
+        
+        :datapath:      str, path that leads to the FESOM2 data
+        
+        :do_filename:   str, (default=None) load this specific filname string instead
+        
+        :fo_file:       str, which kind of file should be loaded, 'run', 
+                        'restart_oce', 'restart_ice', 'blowup'   
+        
+        :vname:         str, name of variable 
+        
+        :runid:         str, runid of simulation usually 'fesom' 
+    
+    Returns:
+    
+        :pathlist:      str, list
+    
+    ____________________________________________________________________________ 
+    """
+
     pathlist=[]
     
     # specific filename and path is given to load 
@@ -492,15 +607,33 @@ def do_pathlist(year, datapath, do_filename, do_file, vname, runid):
 
 
 
-# _____________________________________________________________________________
-#|                                                                             |
-#| ___INPUT_________________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#|                                                                             |
-#| ___RETURNS_______________________________________________________________   |
-#| data         :   returns xarray dataset object                              |
-#|_____________________________________________________________________________|
+#
+#
+# ___CREATE GRIDINFO AND AREA &N DEPTH WEIGHTS__________________________________
 def do_gridinfo_and_weights(mesh, data, do_hweight=True, do_zweight=False):
+    """
+    --> apply all coordinate information to the dataset. Apply vertice/ element centroids
+    lon/lat positions, horizontal area weights for the scalar and vector cell and 
+    vertical depth weight
+    
+    Parameters:
+    
+        :mesh:          fesom2 tripyview mesh object,  with all mesh information 
+        
+        :data:          xarray dataset object
+        
+        :do_hweight:    bool, (default=True) store weightsd for weighted horizontal
+                        averages
+        
+        :do_zweight:    bool, (default=False) store weights for vertical weigthed 
+                        averages within the dataset
+                        
+    Returns:
+        
+        :data:          xarray dataset object, with coordinate + weight information
+        
+    """
+    
     # Suppress the specific warning about sending large graphs
     warnings.filterwarnings("ignore", category=UserWarning, message="Sending large graph of size")
 
@@ -509,14 +642,16 @@ def do_gridinfo_and_weights(mesh, data, do_hweight=True, do_zweight=False):
         dimv = 'nz1'
         if   ('nz1'  in data.coords): data = data.drop_vars('nz1' ) 
         elif ('nz_1' in data.coords): data = data.drop_vars('nz_1') 
-        data = data.assign_coords(nz1  = xr.DataArray(-mesh.zmid,                  dims=dimv).astype('float32').chunk(data.chunksizes[dimv]) )
-        data = data.assign_coords(nzi  = xr.DataArray(np.arange(0,mesh.zmid.size), dims=dimv).astype('uint8'  ).chunk(data.chunksizes[dimv]) )
+        set_chunk = dict({dimv:data.chunksizes[dimv]}) 
+        data = data.assign_coords({'nz1': xr.DataArray(-mesh.zmid,                  dims=dimv).astype('float32').chunk(set_chunk) })
+        data = data.assign_coords({'nzi': xr.DataArray(np.arange(0,mesh.zmid.size), dims=dimv).astype('uint8'  ).chunk(set_chunk) })
         
     elif ('nz'   in data.dims): 
         dimv = 'nz'
         if ('nz1'  in data.coords): data = data.drop_vars('nz1' ) 
-        data = data.assign_coords(nz   = xr.DataArray(-mesh.zlev,                  dims=dimv).astype('float32').chunk(data.chunksizes[dimv]) )
-        data = data.assign_coords(nzi  = xr.DataArray(np.arange(0,mesh.zlev.size), dims=dimv).astype('uint8').chunk(data.chunksizes[dimv]) )
+        set_chunk = dict({dimv:data.chunksizes[dimv]}) 
+        data = data.assign_coords(nz   = xr.DataArray(-mesh.zlev,                  dims=dimv).astype('float32').chunk(set_chunk) )
+        data = data.assign_coords(nzi  = xr.DataArray(np.arange(0,mesh.zlev.size), dims=dimv).astype('uint8').chunk(set_chunk) )
         
     elif ('ndens'   in data.dims): 
         dimv = 'ndens'
@@ -524,7 +659,9 @@ def do_gridinfo_and_weights(mesh, data, do_hweight=True, do_zweight=False):
     dimh = None
     if   ('nod2' in data.dims):
         dimh = 'nod2'
-        set_chunk = dict({dimh: data.chunksizes[dimh]})
+        if dimh in data.chunksizes: set_chunk = dict({dimh: data.chunksizes[dimh]})
+        else                      : set_chunk = dict({})
+        
         #_______________________________________________________________________
         # set coordinates
         data = data.assign_coords(lon  = xr.DataArray(mesh.n_x              , dims=dimh).chunk(set_chunk))
@@ -568,7 +705,9 @@ def do_gridinfo_and_weights(mesh, data, do_hweight=True, do_zweight=False):
         
     elif ('elem' in data.dims):                          
         dimh = 'elem'
-        set_chunk = dict({dimh: data.chunksizes[dimh]})
+        if dimh in data.chunksizes: set_chunk = dict({dimh: data.chunksizes[dimh]})
+        else                      : set_chunk = dict({})
+        
         #_______________________________________________________________________
         # set coordinates
         data = data.assign_coords(lon  = xr.DataArray(mesh.n_x[mesh.e_i].sum(axis=1)/3.0, dims=dimh).chunk(set_chunk))
@@ -612,15 +751,27 @@ def do_gridinfo_and_weights(mesh, data, do_hweight=True, do_zweight=False):
 
     
 
-# _____________________________________________________________________________
-#|                                                                             |
-#| ___INPUT_________________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#|                                                                             |
-#| ___RETURNS_______________________________________________________________   |
-#| data         :   returns xarray dataset object                              |
-#|_____________________________________________________________________________|
+#
+#
+# ___SET 3D BOTTOM VALUES TO NAN_______________________________________________
 def do_setbottomnan(mesh, data, do_nan):
+    """
+    --> replace bottom fill values with nan (default value is zero)
+    
+    Parameters:
+    
+        :mesh:      fesom2 tripyview mesh object,  with all mesh information
+        
+        :data:      xarray dataset object     
+        
+        :do_nan:    bool,  do replace bottom fill values with nan
+        
+    Returns:
+    
+        :data:      xarray dataset object     
+        
+    ____________________________________________________________________________
+    """
     # set bottom to nan --> in moment the bottom fill value is zero would be 
     # better to make here a different fill value in the netcdf files !!!
     if do_nan and any(x in data.dims for x in ['nz1','nz']): 
@@ -654,22 +805,43 @@ def do_setbottomnan(mesh, data, do_nan):
 
 
 
+#
+#
 # ___DO TIME SELECTION_________________________________________________________
-#| select specific month, dayy or record number                                |
-#| ___INPUT_________________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#| mon          :   list, (default=None), specific month that should be        |
-#|                  selected from dataset. If mon selection leads to no data   |
-#|                  selection,because data maybe annual, selection is set to   |
-#|                  mon=None                                                   |
-#| day          :   list, (default=None), same as mon but for day              |
-#| record       :   int,list, (default=None), load specific record number from |
-#|                  dataset. Overwrites effect of mon and sel_day              |
-#| ___RETURNS_______________________________________________________________   |
-#| data         :   returns xarray dataset object                              |
-#|_____________________________________________________________________________|
 def do_select_time(data, mon, day, record, str_mtim):
+    """
+    --> select specific month, dayy or record number                             
     
+    Paramters:
+    
+        :data:      xarray dataset object                                   
+        
+        :mon:       list, (default=None), specific month that should be     
+                    selected from dataset. If mon selection leads to no data
+                    selection, because data maybe annual, selection is set to
+                    mon=None                                                
+        
+        :day:       list, (default=None), same as mon but for day           
+        
+        :record:    int, list, (default=None), load specific record number from
+                    dataset. Overwrites effect of mon and sel_day    
+                    
+        :str_mtim:  str, time label string input here contains already selection
+                    from years 'y:1958-2019', now add info from selction of month or 
+                    days
+    
+    Returns:
+    
+        :data:      returns xarray dataset object      
+        
+        :mon:       list, with mon that got selected otherwise None
+        
+        :day:       list, with day  that got selected otherwise None
+        
+        :str_ltim:  str, with selected time information 
+    
+    ____________________________________________________________________________
+    """
     #___________________________________________________________________________
     # select no time use entire yearly file
     if (mon is None) and (day is None) and (record is None):
@@ -738,23 +910,34 @@ def do_select_time(data, mon, day, record, str_mtim):
 
 
 
+#
+#
 # ___DO VERTICAL LEVEL SELECTION_______________________________________________
-#| selct vertical levels based on depth list                                   |
-#| ___INPUT_________________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#| mesh         :   fesom2 mesh object                                         |
-#| depth        :   int, list, np.array, range (default=None). Select single   |
-#|                  depth level that will be interpolated or select list of    |
-#|                  depth levels that will be interpolated and vertically      | 
-#|                  averaged. If None all vertical layers in data are loaded   |
-#| depidx       :   bool, (default:False) if depth is int and depidx=True,     |
-#|                  depth index is selected that is closest to depth. No       |
-#|                  interpolation will be done                                 |
-#| ___RETURNS_______________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#|_____________________________________________________________________________|
 def do_select_levidx(data, mesh, depth, depidx):
+    """
+    --> select vertical levels based on depth list
     
+    Parameters:
+    
+        :data:      xarray dataset object
+        
+        :mesh:      fesom2 mesh object
+        
+        :depth:     int, list, np.array, range (default=None). Select single
+                    depth level that will be interpolated or select list of
+                    depth levels that will be interpolated and vertically
+                    averaged. If None all vertical layers in data are loaded
+        
+        :depidx:    bool, (default:False) if depth is int and depidx=True,
+                    depth index is selected that is closest to depth. No
+                    interpolation will be done
+    
+    Returns:
+    
+        :data:      xarray dataset object
+        
+    ____________________________________________________________________________
+    """
     #___________________________________________________________________________
     # no depth selecetion at all
     if   (depth is None): 
@@ -802,20 +985,32 @@ def do_select_levidx(data, mesh, depth, depidx):
 
 
 
+#
+#
 # ___COMPUTE VERTICAL LEVEL SELECTION INDEX____________________________________
-#| compute level indices that are needed to interpolate the depth levels       |                                                                             |
-#| ___INPUT_________________________________________________________________   |
-#| zlev         :   list, depth vector of the datas                            |
-#| depth        :   list, with depth levels that should be interpolated        |
-#| depidx       :   bool, (default:False) if depth is int and depidx=True,     |
-#|                  depth index is selected that is closest to depth. No       |
-#|                  interpolation will be done                                 |
-#| ndimax       :   int, maximum number of levels  mesh.n_iz.max()-1 for mid   | 
-#|                  depth datas, mesh.n_iz.max() for full level data           |              
-#| ___RETURNS_______________________________________________________________   |
-#| sel_levidx   : list, with level indices that should be extracted            |
-#|_____________________________________________________________________________|
 def do_comp_sel_levidx(zlev, depth, depidx, ndimax):
+    """
+    --> compute level indices that are needed to interpolate the depth levels
+    
+    Parameters:
+    
+        :zlev:          list, depth vector of the datas 
+        
+        :depth:         list, with depth levels that should be interpolated
+        
+        :depidx:        bool, (default:False) if depth is int and depidx=True,
+                        depth index is selected that is closest to depth. No  
+                        interpolation will be done 
+        
+        :ndimax:        int, maximum number of levels  mesh.n_iz.max()-1 for mid
+                        depth datas, mesh.n_iz.max() for full level data
+    
+    Returns:
+    
+        :sel_levidx:    list, with level indices that should be extracted
+        
+    ____________________________________________________________________________
+    """
     
     #___________________________________________________________________________
     # select indices for vertical interpolation for single depth layer
@@ -853,18 +1048,41 @@ def do_comp_sel_levidx(zlev, depth, depidx, ndimax):
     return(sel_levidx)
     
     
-    
+
+#
+#    
 # ___COMPUTE TIME ARITHMETICS ON DATA__________________________________________
-#| do arithmetic on time dimension                                             |                                                                            |
-#| ___INPUT_________________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#| do_tarithm   :   str (default='mean') do time arithmetic on time selection  |
-#|                  option are: None, 'None', 'mean', 'median', 'std', 'var',  |
-#|                  'max', 'min', 'sum'                                        |
-#| ___RETURNS_______________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#|_____________________________________________________________________________|    
 def do_time_arithmetic(data, do_tarithm):
+    """
+    --> do arithmetic over time dimension
+    
+    Parameters:
+    
+        :data:          xarray dataset object
+        
+        :do_tarithm:    str (default='mean') do time arithmetic on time selection
+                        option are
+                        
+                        - None, 'None'
+                        - 'mean' mean over entire time dimension
+                        - 'median' 
+                        - 'std'
+                        - 'var'
+                        - 'max', 
+                        - 'min', 
+                        - 'sum'
+                        - 'ymean','annual' mean over year dimension
+                        - 'mmean','monthly' mean over month dimension
+                        - 'dmean','daily' mean over day dimension
+
+    Returns:
+    
+        :data:          xarray dataset object
+    
+        :str_atim:      str, which time arithmetic was applied 
+        
+    ____________________________________________________________________________
+    """
     str_atim = None
     if do_tarithm is not None:
         
@@ -873,30 +1091,79 @@ def do_time_arithmetic(data, do_tarithm):
         #_______________________________________________________________________
         if   do_tarithm=='mean':
             data = data.mean(  dim="time", keep_attrs=True)
+        
         elif do_tarithm=='median':
             data = data.median(dim="time", keep_attrs=True)
+        
         elif do_tarithm=='std':
             data = data.std(   dim="time", keep_attrs=True) 
+        
         elif do_tarithm=='var':
             data = data.var(   dim="time", keep_attrs=True)       
+        
         elif do_tarithm=='max':
             data = data.max(   dim="time", keep_attrs=True)
+        
         elif do_tarithm=='min':
             data = data.min(   dim="time", keep_attrs=True)  
+        
         elif do_tarithm=='sum':
             data = data.sum(   dim="time", keep_attrs=True)    
-        elif do_tarithm=='ymean':
+        
+        #_______________________________________________________________________
+        # yearly means 
+        elif do_tarithm in ['ymean','annual']:
             import datetime
-            data = data.groupby('time.year').mean('time')
+            data     = data.groupby('time.year').mean('time')
             # recreate time axes based on year
-            data = data.rename_dims({'year':'time'})
+            data     = data.rename_dims({'year':'time'})
             
             warnings.filterwarnings("ignore", category=UserWarning, message="Sending large graph of size")
             warnings.filterwarnings("ignore", category=UserWarning, message="Large object of size \\d+\\.\\d+ detected in task graph")
-            data = data.assign_coords(time=('time', [datetime.datetime(np.int16(yr), 1, 1) for yr in data.year] )).drop_vars('year')
+            
+            aux_time = xr.cftime_range(start='{:d}-01-01'.format(data.year[1]), periods=len(data['time']), freq='YS')
+            data     = data.drop_vars('year')
+            data     = data.assign_coords(time=aux_time)
+            del(aux_time)
             warnings.resetwarnings()
+        
+        #_______________________________________________________________________
+        # monthly means --> seasonal cycle 
+        elif do_tarithm in ['mmean','monthly']:
+            import datetime
+            data     = data.groupby('time.month').mean('time')
+            # recreate time axes based on year
+            data     = data.rename_dims({'month':'time'})
+            
+            warnings.filterwarnings("ignore", category=UserWarning, message="Sending large graph of size")
+            warnings.filterwarnings("ignore", category=UserWarning, message="Large object of size \\d+\\.\\d+ detected in task graph")
+            
+            aux_time = xr.cftime_range(start='0001-01-01', periods=len(data['time']), freq='MS')
+            data     = data.drop_vars('month')
+            data     = data.assign_coords(time=aux_time)
+            del(aux_time)
+            warnings.resetwarnings()
+        
+        #_______________________________________________________________________
+        # daily means --> 1...365
+        elif do_tarithm in ['dmean','daily']:
+            import datetime
+            data     = data.groupby('time.day').mean('time')
+            # recreate time axes based on year
+            data     = data.rename_dims({'day':'time'})
+            
+            warnings.filterwarnings("ignore", category=UserWarning, message="Sending large graph of size")
+            warnings.filterwarnings("ignore", category=UserWarning, message="Large object of size \\d+\\.\\d+ detected in task graph")
+            
+            aux_time = xr.cftime_range(start='0001-01-01', periods=len(data['time']), freq='DS')
+            data     = data.drop_vars('day')
+            data     = data.assign_coords(time=aux_time).drop_vars('day')
+            del(aux_time)
+            warnings.resetwarnings()
+        
         elif do_tarithm=='None':
             ...
+        
         else:
             raise ValueError(' the time arithmetic of do_tarithm={} is not supported'.format(str(do_tarithm))) 
         
@@ -904,38 +1171,67 @@ def do_time_arithmetic(data, do_tarithm):
     return(data, str_atim)
 
 
+
+#
+#
 # ___COMPUTE HORIZONTAL ARITHMETICS ON DATA____________________________________
-#| do arithmetic on depth dimension                                            |
-#| ___INPUT_________________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#| do_harithm   :   str (default='mean') do arithmetic on selected vertical    |
-#|                  layers options are: None, 'None', 'mean', 'max', 'min',    |
-#|                  'sum'                                                      |
-#| dim_name     :   str, name of depth dimension, is different for full-level  |
-#|                  and mid-level data                                         |
-#| ___RETURNS_______________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#|_____________________________________________________________________________|    
 def do_horiz_arithmetic(data, do_harithm, dim_name):
+    """
+    --> do arithmetic on depth dimension
+    
+    Parameters:
+
+        :data:          xarray dataset object
+
+        :do_harithm:    str (default='mean') do arithmetic on selected vertical
+                        layers options are
+                        
+                        - None, 'None'
+                        - 'mean'  ... arithmetic mean 
+                        - 'median'
+                        - 'std'
+                        - 'var'
+                        - 'max' 
+                        - 'min'
+                        - 'sum'   ... arithmetic sum 
+                        - 'wint'  ... weighted horizontal integral int( DATA*dxdy)
+                        - 'wmean' ... weighted horizontal mean
+
+        :dim_name:      str, name of depth dimension, is different for full-level
+                        and mid-level data
+
+    Returns:
+    
+        :data:          xarray dataset object
+
+    """
     if do_harithm is not None:
-        #_______________________________________________________________________
+        
         if   do_harithm=='mean':
             data = data.mean(  dim=dim_name, keep_attrs=True, skipna=True)
+        
         elif do_harithm=='median':
             data = data.median(dim=dim_name, keep_attrs=True, skipna=True)
+        
         elif do_harithm=='std':
             data = data.std(   dim=dim_name, keep_attrs=True, skipna=True) 
+        
         elif do_harithm=='var':
             data = data.var(   dim=dim_name, keep_attrs=True, skipna=True)       
+        
         elif do_harithm=='max':
             data = data.max(   dim=dim_name, keep_attrs=True, skipna=True)
+        
         elif do_harithm=='min':
             data = data.min(   dim=dim_name, keep_attrs=True, skipna=True)  
+        
         elif do_harithm=='sum':
             data = data.sum(   dim=dim_name, keep_attrs=True, skipna=True)            
+        
         elif do_harithm=='wint':
             data    = data*data['w_A']
             data    = data.sum(   dim=dim_name, keep_attrs=True, skipna=True)      
+        
         elif do_harithm=='wmean':
             weights = data['w_A']
             data    = data.drop_vars('w_A')
@@ -945,8 +1241,10 @@ def do_horiz_arithmetic(data, do_harithm, dim_name):
             del weights
             data    = data.sum(   dim=dim_name, keep_attrs=True, skipna=True)  
             data    = data.where(data!=0)
+        
         elif do_harithm=='None' or do_zarithm is None:
             ...
+        
         else:
             raise ValueError(' the time arithmetic of do_tarithm={} is not supported'.format(str(do_tarithm))) 
     
@@ -954,33 +1252,55 @@ def do_horiz_arithmetic(data, do_harithm, dim_name):
     return(data)
 
 
+#
+#
+#
 # ___COMPUTE DEPTH ARITHMETICS ON DATA_________________________________________
-#| do arithmetic on depth dimension                                            |
-#| ___INPUT_________________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#| do_zarithm   :   str (default='mean') do arithmetic on selected vertical    |
-#|                  layers options are: None, 'None', 'mean', 'max', 'min',    |
-#|                  'sum'                                                      |
-#| dim_name     :   str, name of depth dimension, is different for full-level  |
-#|                  and mid-level data                                         |
-#| ___RETURNS_______________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#|_____________________________________________________________________________|    
 def do_depth_arithmetic(data, do_zarithm, dim_name):
+    """
+    --> do arithmetic on depth dimension
+    
+    Parameters:
+        :data:          xarray dataset object 
+
+        :do_zarithm:    str (default='mean') do arithmetic on selected vertical
+                        layers options are
+                        
+                        - None, 'None'
+                        - 'mean' 
+                        - 'max' 
+                        - 'min'
+                        - 'sum'
+                        - 'wint'
+                        - 'wmean'
+ 
+        :dim_name:      str, name of depth dimension, is different for full-level
+                        and mid-level data
+ 
+    Returns:
+    
+        :data:   xarray dataset object
+        
+    ____________________________________________________________________________
+    """
     if do_zarithm is not None:
         
-        #_______________________________________________________________________
         if   do_zarithm=='mean':
             data    = data.mean(dim=dim_name, keep_attrs=True, skipna=True)
+        
         elif do_zarithm=='max':
             data    = data.max( dim=dim_name, keep_attrs=True)
+        
         elif do_zarithm=='min':
             data    = data.min( dim=dim_name, keep_attrs=True)  
+        
         elif do_zarithm=='sum':
             data    = data.sum( dim=dim_name, keep_attrs=True, skipna=True)
+        
         elif do_zarithm=='wint':
             data    = data*data['w_z']
             data    = data.sum(   dim=dim_name, keep_attrs=True, skipna=True)          
+        
         elif do_zarithm=='wmean':
             if   ('nod2' in data.dims):
                 weights = data['w_A']*data['w_z']
@@ -991,8 +1311,10 @@ def do_depth_arithmetic(data, do_zarithm, dim_name):
             data    = data*weights
             data    = data.sum( dim=dim_name, keep_attrs=True, skipna=True) 
             del weights
+        
         elif do_zarithm=='None' or do_zarithm is None:
             ...
+        
         else:
             raise ValueError(' the depth arithmetic of do_zarithm={} is not supported'.format(str(do_zarithm))) 
     #___________________________________________________________________________
@@ -1000,24 +1322,36 @@ def do_depth_arithmetic(data, do_zarithm, dim_name):
 
 
 
+#
+#
 # ___COMPUTE GRID ROTATION OF VECTOR DATA______________________________________
-#| compute roration of vector: vname='vec+u+v'                                 |
-#| ___INPUT_________________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#| mesh         :   fesom2 mesh object                                         |
-#| do_vec       :   bool, should data be considered as vectors                 |
-#| do_vecrot    :   bool, should rotation be applied                           |
-#| ___RETURNS_______________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#|_____________________________________________________________________________|  
 def do_vector_rotation(data, mesh, do_vec, do_vecrot):
+    """
+    --> compute roration of vector: vname='vec+u+v'
+    
+    Parameters:
+    
+        :data:          xarray dataset object
+        
+        :mesh:          fesom2 mesh object
+        
+        :do_vec:        bool, should data be considered as vectors
+        
+        :do_vecrot:     bool, should rotation be applied
+    
+    Returns:
+    
+        :data:          xarray dataset object
+        
+    ____________________________________________________________________________
+    """
     if do_vec and do_vecrot:
         # which varaibles are in data, must be two to compute vector rotation
         vname = list(data.keys())
         
         # vector data are on vertices 
         if ('nod2' in data[vname[0]].dims) or ('node' in data[vname[0]].dims):
-            print(' > do vector rotation')
+            print(' > do nod2 vector rotation')
             data[vname[0] ].data,\
             data[vname[1]].data = vec_r2g(mesh.abg, mesh.n_x, mesh.n_y, 
                                         data[vname[0]].data, data[vname[1]].data, 
@@ -1025,7 +1359,7 @@ def do_vector_rotation(data, mesh, do_vec, do_vecrot):
         
         # vector data are on elements
         if ('elem' in data[vname[0]].dims):
-            print(' > do vector rotation')
+            print(' > do elem vector rotation')
             data[vname[0] ].data,\
             data[vname[1]].data = vec_r2g(mesh.abg, 
                                         mesh.n_x[mesh.e_i].sum(axis=1)/3, 
@@ -1037,15 +1371,25 @@ def do_vector_rotation(data, mesh, do_vec, do_vecrot):
 
 
 
+#
+#
 # ___COMPUTE NORM OF VECTOR DATA_______________________________________________
-#| compute vector norm: vname='vec+u+v'                                        |
-#| ___INPUT_________________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#| do_norm      :   bool, should vector norm be computed                       |
-#| ___RETURNS_______________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#|_____________________________________________________________________________|  
 def do_vector_norm(data, do_norm):
+    """
+    --> compute vector norm: vname='vec+u+v'
+    
+    Parameters:
+    
+        :data:      xarray dataset object
+        
+        :do_norm:   bool, should vector norm be computed
+    
+    Returns:
+    
+        :data:      xarray dataset object
+    
+    ____________________________________________________________________________
+    """
     if do_norm:
         print(' > do compute norm')
         # which varaibles are in data, must be two to compute norm
@@ -1072,50 +1416,84 @@ def do_vector_norm(data, do_norm):
         
         # delet variable vname2 from Dataset
         data = data.drop_vars(vname[1])
-        
-        
+ 
     #___________________________________________________________________________    
     return(data)  
 
 
-# ___COMPUTE LOGARYTHMIC RESCALING_____________________________________________
-#| compute vector norm: vname='vec+u+v'                                        |
-#| ___INPUT_________________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#| do_rescale   :   string 'log10'                                             |
-#| ___RETURNS_______________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#|_____________________________________________________________________________|  
-def do_rescaling(data, do_rescale):
-    if do_rescale=='log10':
-        print(' > do compute log10 rescaling')
-        # which varaibles are in data, must be two to compute norm
-        vname = list(data.keys())[0]
+##
+##
+##
+## ___COMPUTE LOGARYTHMIC RESCALING_____________________________________________
+#def do_rescaling(data, do_rescale):
+    #"""
+    #compute vector norm: vname='vec+u+v'
+    
+    #Parameters: 
+    
+        #:data:          xarray dataset object
         
-        # compute log10
-        #data[vname] = xr.ufuncs.log10(data[vname])
-        attr_glob = data.attrs        # rescue global attributes --> get lost with xr.where
-        attr_loc  = data[vname].attrs # rescue local  attributes --> get lost with xr.where 
-        data = xr.where(data!=0, xr.ufuncs.log10(data), 0.0)
-        data.attrs        = attr_glob # put back global attributes
-        data[vname].attrs = attr_loc  # put back local  attributes
+        #:do_rescale:    string 'log10'
         
-        # set attribute for rescaling
-        data[vname].attrs['do_rescale'] = 'log10()'
+    #Returns:
+
+        #:data:          xarray dataset object
+    #____________________________________________________________________________
+    #"""
+    #if do_rescale=='log10':
+        #print(' > do compute log10 rescaling')
+        ## which varaibles are in data, must be two to compute norm
+        #vname = list(data.keys())[0]
         
-    #___________________________________________________________________________    
-    return(data)  
+        ## compute log10
+        ##data[vname] = xr.ufuncs.log10(data[vname])
+        #attr_glob = data.attrs        # rescue global attributes --> get lost with xr.where
+        #attr_loc  = data[vname].attrs # rescue local  attributes --> get lost with xr.where 
+        #data = xr.where(data!=0, xr.ufuncs.log10(data), 0.0)
+        #data.attrs        = attr_glob # put back global attributes
+        #data[vname].attrs = attr_loc  # put back local  attributes
+        
+        ## set attribute for rescaling
+        #data[vname].attrs['do_rescale'] = 'log10()'
+        
+    ##___________________________________________________________________________    
+    #return(data)  
 
 
+
+#
+#
 # ___COMPUTE NORM OF VECTOR DATA_______________________________________________
-#| compute vector norm: vname='vec+u+v'                                        |
-#| ___INPUT_________________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#| do_norm      :   bool, should vector norm be computed                       |
-#| ___RETURNS_______________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#|_____________________________________________________________________________|  
-def do_potential_desnsity(data, do_pdens, vname, vname2, vname_tmp):
+def do_potential_density(data, do_pdens, vname, vname2, vname_tmp):
+    """
+    --> compute potential density based on temp and salt
+    
+    Parameters:
+    
+        :data:      xarray dataset object, containing temperature and salinity data
+        
+        :do_pdens:  bool, should potential densitz be compute_boundary_edges
+        
+        :vname:     str, name of temperature variable in dataset
+        
+        :vname2:    str, name of salinity variable in dataset
+        
+        :vname_tmp: str, which potential density should be computed
+                    - 'sigma0'  ... pref=0
+                    - 'sigma1'  ... pref=1000
+                    - 'sigma2'  ... pref=2000
+                    - 'sigma3'  ... pref=3000
+                    - 'sigma4'  ... pref=4000
+                    - 'sigma5'  ... pref=5000
+                    
+    Returns:
+    
+        :data:      xarray dataset object, containing potential density
+        
+        :vname:     str, string with variable name of potential density
+        
+    ____________________________________________________________________________
+    """
     if do_pdens:
         pref=0
         if   vname_tmp == 'sigma' or vname_tmp == 'sigma0'  : pref=0
@@ -1130,8 +1508,9 @@ def do_potential_desnsity(data, do_pdens, vname, vname2, vname_tmp):
         else:
             data_depth = data['nz1'].expand_dims(dict({'nod2':data.dims['nod2']}))
             
-        # data = data.assign({vname_tmp: (list(data[vname].dims), sw.pden(data[vname2].data, data[vname].data, data_depth, pref)-1000.025)})
+        # data = data.assign({vname_tmp: (list(data[vname].dims), sw.pden(data[vname2].data, data[vname].data, data_depth, pref)-1000.00)})
         data = data.assign({vname_tmp: (list(data[vname].dims), sw.dens(data[vname2].data, data[vname].data, pref)-1000.00)})
+        
         del(data_depth)
         
         data[vname_tmp] = data[vname_tmp].where(data[vname2]!=0,drop=0.0)
@@ -1146,18 +1525,27 @@ def do_potential_desnsity(data, do_pdens, vname, vname2, vname_tmp):
 
 
 
-
+#
+#
 # ___INTERPOLATE ELEMENTAL DATA TO VERTICES____________________________________
-#| interpolate data on elements to vertices                                    |
-#| ___INPUT_________________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#| mesh         :   fesom2 mesh object                                         |
-#  do_ie2n      :   bool, True/False if interpolation should be applied        |
-#| ___RETURNS_______________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#|_____________________________________________________________________________|  
 def do_interp_e2n(data, mesh, do_ie2n):
+    """
+    --> interpolate data on elements to vertices
     
+    Parameters:
+    
+        :data:      xarray dataset object
+        
+        :mesh:      fesom2 mesh object   
+        
+        :do_ie2n:   bool, True/False if interpolation should be applied
+    
+    Returns:
+        
+        :data:      xarray dataset object
+        
+    ____________________________________________________________________________
+    """
     # which variables are stored in dataset
     vname_list = list(data.keys())
     if ('elem' in data[vname_list[0]].dims) and do_ie2n:
@@ -1185,23 +1573,43 @@ def do_interp_e2n(data, mesh, do_ie2n):
             
             # delete elem variable from dataset
             data = data.drop_vars(vname)
+
             del(aux)
+        #_______________________________________________________________________
+        # kick out element related coordinates 
+        for coordi in list(data.coords):
+            if 'elem' in data[coordi].dims: data = data.drop_vars(coordi)
+        
+        #_______________________________________________________________________
+        # enter area weights for nodes
+        data, _ , _ = do_gridinfo_and_weights(mesh, data, do_hweight=True, do_zweight=False)
     #___________________________________________________________________________
     return(data)
 
 
 
+#
+#
 # ___PUT ADDITIONAL VARIABLE INFORMATION INTO ATTRIBUTES_______________________
-#| write additional information to variable attributes                         |
-#| ___INPUT_________________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#| vname        :   str, (default: None), variable name that should be loaded  |
-#| attr_dict    :   dict with different infos that are written to attributes   |
-#| ___RETURNS_______________________________________________________________   |
-#| data         :   xarray dataset object                                      |
-#|_____________________________________________________________________________|  
 def do_additional_attrs(data, vname, attr_dict):
+    """
+    --> write additional information to variable attributes
+    
+    Parameters:
+    
+        :data:      xarray dataset object
+        
+        :vname:     str, (default: None), variable name that should be loaded
+        
+        :attr_dict: dict with different infos that are written to dataset 
+                    variable attributes
+        
+    Returns:    
 
+        :data:      xarray dataset object
+
+    ____________________________________________________________________________
+    """
     #___________________________________________________________________________
     for key in attr_dict:
         data[vname].attrs[key] = str(attr_dict[key])
@@ -1216,16 +1624,25 @@ def do_additional_attrs(data, vname, attr_dict):
 
 
 
+#
+#
 # ___DO ANOMALY________________________________________________________________
-#| compute anomaly between two xarray Datasets                                 |
-#| ___INPUT_________________________________________________________________   |
-#| data1        :   xarray dataset object                                      |
-#| data2        :   xarray dataset object                                      |
-#| ___RETURNS_______________________________________________________________   |
-#| anom         :   xarray dataset object, data1-data2                         |
-#|_____________________________________________________________________________|
 def do_anomaly(data1,data2):
+    """
+    --> compute anomaly between two xarray Datasets
     
+    Parameters:
+    
+        :data1:   xarray dataset object
+
+        :data2:   xarray dataset object
+
+    Returns:
+    
+        :anom:   xarray dataset object, data1-data2
+
+    ____________________________________________________________________________
+    """
     # copy datasets object 
     anom = data1.copy()
     
@@ -1247,7 +1664,7 @@ def do_anomaly(data1,data2):
             if (key in attrs_data1.keys()) and (key in attrs_data2.keys()):
                 if key in ['long_name']:
                    # anom[vname].attrs[key] = 'anomalous '+anom[vname].attrs[key]
-                   anom[vname].attrs[key] = 'anom. '+anom[vname].attrs[key]
+                   anom[vname].attrs[key] = 'anom. '+anom[vname].attrs[key].capitalize()
                    
                 elif key in ['short_name']:
                    # anom[vname].attrs[key] = 'anomalous '+anom[vname].attrs[key]
@@ -1257,7 +1674,8 @@ def do_anomaly(data1,data2):
                     continue
                 
                 elif key in ['descript']: 
-                    if len(data1[vname].attrs[key])+len(data2[vname2].attrs[key])>30:
+                    # print(len(data1[vname].attrs[key])+len(data2[vname2].attrs[key]))
+                    if len(data1[vname].attrs[key])+len(data2[vname2].attrs[key])>75:
                         anom[vname].attrs[key]  = data1[vname].attrs[key]+'\n - '+data2[vname2].attrs[key]
                     else:     
                         anom[vname].attrs[key]  = data1[vname].attrs[key]+' - '+data2[vname2].attrs[key]
