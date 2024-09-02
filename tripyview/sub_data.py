@@ -42,6 +42,7 @@ def load_data_fesom2(mesh,
                      do_compute     = False     , 
                      do_load        = True      , 
                      do_persist     = False     , 
+                     do_parallel    = False     ,
                      chunks         = { 'time' :'auto', 'elem':'auto', 'nod2':'auto', \
                                         'edg_n':'auto', 'nz'  :'auto', 'nz1' :'auto', \
                                         'ndens':'auto'},
@@ -316,7 +317,7 @@ def load_data_fesom2(mesh,
     # load multiple files
     # load normal FESOM2 run file
     if do_file=='run':
-        data = xr.open_mfdataset(pathlist, parallel=True, chunks=chunks, 
+        data = xr.open_mfdataset(pathlist, parallel=do_parallel, chunks=chunks, 
                                  autoclose=False, preprocess=(lambda ds: partial_func(x_to_nod2(ds))), **kwargs)
         if do_showtime: 
             print(data.time.data)
@@ -326,7 +327,7 @@ def load_data_fesom2(mesh,
         # dataset structure
         if do_vec or do_norm or do_pdens:
             pathlist, dum = do_pathlist(year, datapath, do_filename, do_file, vname2, runid)
-            data     = xr.merge([data, xr.open_mfdataset(pathlist,  parallel=True, chunks=chunks, 
+            data     = xr.merge([data, xr.open_mfdataset(pathlist,  parallel=do_parallel, chunks=chunks, 
                                                          autoclose=False, preprocess=partial_func, **kwargs)])
             if do_vec: is_data='vector'
         
@@ -337,7 +338,7 @@ def load_data_fesom2(mesh,
     # load restart or blowup files
     else:
         print(pathlist)
-        data = xr.open_mfdataset(pathlist, parallel=True, chunks=chunks, 
+        data = xr.open_mfdataset(pathlist, parallel=do_parallel, chunks=chunks, 
                                  autoclose=False, preprocess=partial_func, **kwargs)
         if do_vec or do_norm or do_pdens:
             # which variables should be dropped 
