@@ -336,7 +336,9 @@ def plot_hslice(mesh                   ,
     for ii in np.unique(cb_plt_idx):
         idsel = np.where(cb_plt_idx==ii)[0]
         #_______________________________________________________________________
-        if isinstance(cinfo, list):
+        if isinstance(cinfo, list) and isinstance(do_rescale, list):
+            cinfo_plot.append( do_setupcinfo(cinfo[ii-1], [data[jj] for jj in idsel], do_rescale[ii-1], mesh=mesh, tri=tri) )
+        elif isinstance(cinfo, list):
             cinfo_plot.append( do_setupcinfo(cinfo[ii-1], [data[jj] for jj in idsel], do_rescale, mesh=mesh, tri=tri) )
         else:    
             cinfo_plot.append( do_setupcinfo(cinfo, [data[jj] for jj in idsel], do_rescale, mesh=mesh, tri=tri) )
@@ -448,9 +450,14 @@ def plot_hslice(mesh                   ,
         #_______________________________________________________________________
         # add colorbar 
         if hcb_ii != 0 and hp[-1] is not None: 
-            hcb_ii = do_cbar(hcb_ii, hax_ii, hp, data[ii_valid], cinfo_plot[cb_plt_idx[ii_valid]-1], do_rescale, 
-                             cb_label, cb_lunit, cb_ltime, cb_ldep, norm=norm_plot[ cb_plt_idx[ii_valid]-1 ], 
-                             cb_opt=cb_opt, cbl_opt=cbl_opt, cbtl_opt=cbtl_opt)
+            if isinstance(do_rescale, list):
+                hcb_ii = do_cbar(hcb_ii, hax_ii, hp, data[ii_valid], cinfo_plot[cb_plt_idx[ii_valid]-1], do_rescale[cb_plt_idx[ii_valid]-1], 
+                                cb_label, cb_lunit, cb_ltime, cb_ldep, norm=norm_plot[ cb_plt_idx[ii_valid]-1 ], 
+                                cb_opt=cb_opt, cbl_opt=cbl_opt, cbtl_opt=cbtl_opt)
+            else:    
+                hcb_ii = do_cbar(hcb_ii, hax_ii, hp, data[ii_valid], cinfo_plot[cb_plt_idx[ii_valid]-1], do_rescale, 
+                                cb_label, cb_lunit, cb_ltime, cb_ldep, norm=norm_plot[ cb_plt_idx[ii_valid]-1 ], 
+                                cb_opt=cb_opt, cbl_opt=cbl_opt, cbtl_opt=cbtl_opt)
         
         #___________________________________________________________________
         # add all handles together 
@@ -1649,6 +1656,7 @@ def plot_vslice(mesh                   ,
     #___________________________________________________________________________
     # --> loop over axes
     hp, hbot, hmsh, hlsm, hgrd = list(), list(), list(), list(), list()
+    count_cb = 0
     for ii, (hax_ii, hcb_ii) in enumerate(zip(hax, hcb)):
         # if there are no ddatra to fill axes, make it invisible 
         if ii>=ndat: 
@@ -1661,7 +1669,7 @@ def plot_vslice(mesh                   ,
             #___________________________________________________________________
             # prepare regular gridded data for plotting
             data_x, data_y, data_plot = do_data_prepare_vslice(hax_ii, data[ii], box_idx)
-            
+           
             #___________________________________________________________________
             # add tripcolor or tricontourf plot 
             h0 = do_plt_datareg(hax_ii, do_plt, data_x, data_y, data_plot, 
@@ -1679,7 +1687,7 @@ def plot_vslice(mesh                   ,
             if   hax_ii.projection=='index+depth+xy':
                 h0 = do_plt_bot(hax_ii, do_bot, data_x=data_x, data_y=data_y, 
                                 data_plot=data_plot, bot_opt=bot_opt)
-            
+        
             # zmoc bottom patch
             elif hax_ii.projection=='zmoc':
                 ax_ylim0 = [0, abs(mesh.zlev[-1])]
@@ -1757,11 +1765,15 @@ def plot_vslice(mesh                   ,
             
         #_______________________________________________________________________
         # add colorbar 
-        if hcb_ii != 0 and hp[-1] is not None: 
-            hcb_ii = do_cbar(hcb_ii, hax_ii, hp, data[ii_valid], cinfo_plot[cb_plt_idx[ii_valid]-1], do_rescale, 
-                             cb_label, cb_lunit, cb_ltime, cb_ldep, norm=norm_plot[ cb_plt_idx[ii_valid]-1 ], 
-                             box_idx=box_idx, cb_opt=cb_opt, cbl_opt=cbl_opt, cbtl_opt=cbtl_opt)
         
+        if hcb_ii != 0 and hp[-1] is not None: 
+            if isinstance(cb_label,list): cb_label2 = cb_label[count_cb]
+            else: cb_label2 = cb_label
+            hcb_ii = do_cbar(hcb_ii, hax_ii, hp, data[ii_valid], cinfo_plot[cb_plt_idx[ii_valid]-1], do_rescale, 
+                             cb_label2, cb_lunit, cb_ltime, cb_ldep, norm=norm_plot[ cb_plt_idx[ii_valid]-1 ], 
+                             box_idx=box_idx, cb_opt=cb_opt, cbl_opt=cbl_opt, cbtl_opt=cbtl_opt)
+            
+            count_cb=count_cb+1
         #_______________________________________________________________________
         # hfig.canvas.draw()   
         
@@ -2831,18 +2843,20 @@ def plot_tline(data,
             
             #___________________________________________________________________
             allinone = False
-            if   nrow*ncol == 1:
-                if   nbox == 1: box_idx = [0]
-                elif nbox >  1: 
-                    box_idx, allinone = list(range(0,nbox)), True
-                    
-            elif nrow*ncol > 1 and nrow*ncol >= nbox:   
-                box_idx, allinone = [ii], False
+            if box_idx is None:
+                if   nrow*ncol == 1:
+                    if   nbox == 1: box_idx = [0]
+                    elif nbox >  1: 
+                        box_idx, allinone = list(range(0,nbox)), True
+                        
+                elif nrow*ncol > 1 and nrow*ncol >= nbox:   
+                    box_idx, allinone = [ii], False
             xmin, xmax, ymin, ymax = np.inf, -np.inf, np.inf, -np.inf
-            
+
             #___________________________________________________________________
             # If nrow*ncol=1    && nbox > 1: plot all box lines in one figure panel
             #    nrow*ncol=nbox && nbox > 1: plot each box lines in separate figure panel
+            if not isinstance(box_idx, list): box_idx = [box_idx]
             for bi in box_idx:
                 #___________________________________________________________________
                 # prepare regular gridded data for plotting
@@ -3798,10 +3812,12 @@ def do_axes_arrange(nx, ny,
             #hax[nn].set_title('', fontsize=fs_title)
             matplotlib.rcParams['axes.titlesize'] = fs_title
             hax[nn].tick_params(labelsize=fs_ticks)
-            hax[nn].fs_label=fs_label
-            hax[nn].fs_ticks=fs_ticks
-            hax[nn].fs_title=fs_title
-            hax[nn].dpi     =hfig.dpi
+            hax[nn].fs_label = fs_label
+            hax[nn].fs_ticks = fs_ticks
+            hax[nn].fs_title = fs_title
+            hax[nn].fig_dpi = hfig.dpi
+            hax[nn].fig_width, hax[nn].fig_height = hfig.get_size_inches()
+            
             #___________________________________________________________________
             # colorbar
             if cb_plt[ii,jj] != 0 and projection[0]!='index+depth' and projection[0]!='index+time' and projection[0]!='index+xy':
@@ -4498,9 +4514,16 @@ def do_plt_datareg(hax_ii, do_plt, data_x, data_y, data_plot, cinfo_plot, which_
         cminmax=dict()
         if which_norm_plot is None:cminmax.update({'vmin':cinfo_plot['clevel'][0], 'vmax':cinfo_plot['clevel'][-1]})
         
-        h0 = hax_ii.pcolormesh(data_x, data_y, data_plot,
-                              cmap=cinfo_plot['cmap'],
-                              norm = which_norm_plot, transform=which_transf, **cminmax, **plt_optdefault)
+        # the transform=which_transf options in combination with pcolormesh seems 
+        # only to work in case of horizontal cartopy plot not in vertical slice 
+        # plot even when which_transf=None
+        if isinstance(hax_ii.projection, ccrs.CRS): plt_optdefault.update({'transform':which_transf})
+        h0 = hax_ii.pcolormesh(data_x, data_y, data_plot, 
+                               cmap=cinfo_plot['cmap'], norm=which_norm_plot, **cminmax, **plt_optdefault)
+        
+        #0 = hax_ii.pcolormesh(data_x, data_y, data_plot,
+                              #cmap=cinfo_plot['cmap'],
+                              #norm=which_norm_plot, transform=which_transf, **cminmax, **plt_optdefault)
         
     #___________________________________________________________________________
     # plot contourf 
@@ -5266,7 +5289,10 @@ def do_plt_gridlines(hax_ii, do_grid, box, ndat,
                 elif hax_ii.projection not in ['zmoc', 'dmoc+depth']: 
                     hax_ii.set_ylim(ylim[0]-(ylim[1]-ylim[0])*0.025  ,ylim[-1]+(ylim[1]-ylim[0])*0.025)
             
-            if xlim is not None: hax_ii.set_xlim(xlim[0]  ,xlim[-1])
+            if xlim is not None: 
+                hax_ii.set_xlim(xlim[0]  ,xlim[-1])
+            else: 
+                hax_ii.set_xlim(data_x[0], data_x[-1])
             
             #___________________________________________________________________
             # invert y-axis
@@ -5408,8 +5434,22 @@ def do_cbar(hcb_ii, hax_ii, hp, data, cinfo, do_rescale, cb_label, cb_lunit, cb_
     
     cbl_optdefault = dict({'fontsize':fsize})
     cbl_optdefault.update(cbl_opt)
+    
+    ## wrap xlabel string when they are to long
+    ## Estimate the width of the axes dynamically
+    #axes_width_px = hcb_ii.ax.get_position().height * hax_ii.fig_height * hax_ii.fig_dpi
+    
+    ## Estimate the width of the axes in terms of characters
+    ## font_size = plt.rcParams['font.size']
+    #font_size = hcb_ii.ax.yaxis.get_label().get_size()
+    #max_chars_per_line = int(axes_width_px / (font_size))  # Empirical factor for font size to character width ratio
+    #cb_label = '\n'.join(textwrap.wrap(cb_label, width=max_chars_per_line))
+    
+    #___________________________________________________________________________
+    
     hcb_ii.set_label(cb_label, **cbl_optdefault)
     #___________________________________________________________________________
+    
     return(hcb_ii)
 
 
