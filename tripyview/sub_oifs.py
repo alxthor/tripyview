@@ -110,6 +110,9 @@ def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=Non
     data_set = do_oifs_weights(data_set, do_zweight=do_zweight, do_hweight=do_hweight)
 
     # years are selected by the files that are open, need to select mon or day or record 
+    if file_names is not None:
+        if isinstance(years, list) and len(years)==2: data_set = data_set.sel(time=slice(str(years[0]), str(years[1])))
+        else: raise NotImplementedError('Selecting specific years instead of range is only implemented through file selection (one-to-one correspondence year <--> file)')
     data_set, mon, day, str_ltim = do_select_time(data_set, mon, day, record, str_ltim)
     
     # do time arithmetic on data
