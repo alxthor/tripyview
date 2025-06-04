@@ -58,11 +58,13 @@ def get_filepaths(data_path, file_names):
 def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=None, height=None, heightidx=None,
               do_tarithm='mean', do_zarithm='mean', descript='', do_compute=False, do_load=True, do_persist=False,
               file_names=None, do_zweight=False, do_hweight=True,
-              drop_vars=['time_centered_bounds', 'time_counter_bounds'],
+              drop_vars=['time_centered_bounds', 'time_counter_bounds', 'time_counter_bnds'],
               chunks={'time_counter': 'auto', 'lon': 'auto', 'lat': 'auto'}, **kwargs):
     """
     load OIFS data
     In case file_names is not None: vname and years is just used for metadata info, data_freq is meaningless
+
+    drop_vars should contain all variables that rely on time dimension somehow in order to avoid inconstistent chunking error
     """
 # 'time_centered_bounds', 'time_counter_bounds' are variables
 # time_centered is a coordinate that is not automatically chunked the same way that the data is
@@ -90,7 +92,7 @@ def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=Non
             raise ValueError( " year can be integer, list, np.array or range(start,end). Got {}, namely {}".format(type(years), years))
     file_paths = get_filepaths(data_path, file_names)#[data_path + '/' + file_name for file_name in file_names]
     data_set = xr.open_mfdataset(file_paths, parallel=True, chunks=chunks, **kwargs)
-    data_set = data_set.drop_vars(drop_vars)
+    data_set = data_set.drop_vars(drop_vars, errors='ignore')
     if 'time_centered' in data_set.coords:
         if chunks['time_counter'] == 'auto':
             # data_set.time_centered.load() # needs to be loaded or deleted to avoid incosistent chunk sizes
@@ -148,17 +150,18 @@ def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=Non
 def open_multiple_data(data_paths, data_names, vname, data_freq, years, mon=None, day=None, record=None,
                        height=None, heightidx=None, do_tarithm='mean', do_zarithm='mean',
                        do_compute=False, do_load=True, do_persist=False, ref_path=None, do_reffig=False,
-                       ref_year=None, ref_mon=None, ref_day=None, ref_record=None,
+                       file_names=None,
+                       ref_year=None, ref_mon=None, ref_day=None, ref_record=None, ref_file_names=None,
                        chunks={'time_counter': 'auto', 'lon': 'auto', 'lat': 'auto'}, **kwargs):
     '''for every path / experiment it opens a dataset with the variable'''
     assert len(data_paths) == len(data_names), "data_paths and data_names do not have the same length"
     data_sets = []
     for ii, (data_path, data_name) in enumerate(zip(data_paths, data_names)):
-        yearsi, moni, dayi, recordi = years, mon, day, record
-        if (ii==0) and (ref_path != None and ref_path != 'None'): yearsi, moni, dayi, recordi = ref_year, ref_mon, ref_day, ref_record
+        yearsi, moni, dayi, recordi, file_namesi = years, mon, day, record, file_names
+        if (ii==0) and (ref_path != None and ref_path != 'None'): yearsi, moni, dayi, recordi, file_namesi = ref_year, ref_mon, ref_day, ref_record, ref_file_names
         data_set = open_data(data_path, vname, data_freq, yearsi, mon=moni, day=dayi, record=recordi, height=height, heightidx=heightidx,
                              do_tarithm=do_tarithm, do_zarithm=do_zarithm, do_compute=do_compute, do_load=do_load, do_persist=do_persist,
-                             descript=data_name, chunks=chunks, **kwargs)
+                             descript=data_name, file_names=file_namesi, chunks=chunks, **kwargs)
 
         # create reference data if given 
         if (ii==0) and (ref_path != None and ref_path != 'None'):
