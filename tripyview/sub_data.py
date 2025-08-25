@@ -305,7 +305,8 @@ def load_data_fesom2(mesh,
     
     def x_to_nod2(ds):
         if 'x' in ds.dims and 'nod2' not in ds.dims:
-            dask.distributed.print("x and nod2 seem to be swapped. Renaming dims in {}".format(ds.encoding["source"]))
+            try: dask.distributed.print("x and nod2 seem to be swapped. Renaming dims in {}".format(ds.encoding["source"]))
+            except: pass
             sys.stdout.flush()
             return ds.rename({'x': 'nod2'})
         else:
@@ -317,7 +318,9 @@ def load_data_fesom2(mesh,
     # load multiple files
     # load normal FESOM2 run file
     if do_file=='run':
-        data = xr.open_mfdataset(pathlist, parallel=do_parallel, chunks=chunks, 
+        # AT: drop time_bnds which has dtype object to avoid problem with auto chunking. using preprocess is
+        # AT: not sufficient since it is only called after attempting to auto-chunk the data
+        data = xr.open_mfdataset(pathlist, parallel=do_parallel, chunks=chunks, drop_variables=['time_bnds'],
                                  autoclose=False, preprocess=(lambda ds: partial_func(x_to_nod2(ds))), **kwargs)
         if do_showtime: 
             print(data.time.data)
