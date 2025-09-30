@@ -1237,14 +1237,7 @@ def do_horiz_arithmetic(data, do_harithm, dim_name):
             data    = data.sum(   dim=dim_name, keep_attrs=True, skipna=True)      
         
         elif do_harithm=='wmean':
-            weights = data['w_A']
-            data    = data.drop_vars('w_A')
-            weights = weights.where(np.isnan(data)==False)
-            weights = weights/weights.sum(dim=dim_name, skipna=True)
-            data    = data*weights
-            del weights
-            data    = data.sum(   dim=dim_name, keep_attrs=True, skipna=True)  
-            data    = data.where(data!=0)
+            data = data.weighted(data['w_A']).sum(dim=dim_name, keep_attrs=True, skipna=True)  
         
         elif do_harithm=='None' or do_zarithm is None:
             ...
