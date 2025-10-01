@@ -1237,7 +1237,7 @@ def do_horiz_arithmetic(data, do_harithm, dim_name):
             data    = data.sum(   dim=dim_name, keep_attrs=True, skipna=True)      
         
         elif do_harithm=='wmean':
-            data = data.weighted(data['w_A']).sum(dim=dim_name, keep_attrs=True, skipna=True)  
+            data = data.weighted(data['w_A']).mean(dim=dim_name, keep_attrs=True, skipna=True)  
         
         elif do_harithm=='None' or do_zarithm is None:
             ...
