@@ -6,6 +6,9 @@ def colormap_c2c(cmin, cmax, cref, cnumb, cname, cstep=[], do_slog=False, do_res
     from   matplotlib.pyplot    import get_cmap # for python ver>=3.11
     from   scipy                import interpolate
     import cmocean 
+    import sys
+    sys.path.insert(1, '/home/a/a270205/PhD-Project/PlotScripts/FESOM/')
+    import my_functions as mf
     #import cmocean
     # cmin ... value of minimum color
     # cmax ... value of maximum color
@@ -91,6 +94,7 @@ def colormap_c2c(cmin, cmax, cref, cnumb, cname, cstep=[], do_slog=False, do_res
         dum, cstr = cname.rsplit('.')
         if '_i' in cname: cstr, dum = cstr.rsplit('_i')
         cmap = eval("cmocean.cm.{}".format(cstr))
+        if cmocean.cm.ice.name == 'ice': cmap = mf.truncate_colormap(cmap, minval=0.2)
         cmap_def = cmap(np.linspace(0,1,11))
         #cmap_def = cmap(np.linspace(0,1,cnumb))
         cmap_def = cmap_def[:,:-1]    
