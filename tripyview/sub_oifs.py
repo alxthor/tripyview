@@ -312,7 +312,7 @@ def accumulated_to_instantaneous(data_set, vname):
     
     vname: Has to be in the list of known accumulated fields for this function to have an effect. 
            If vname is not in this list, the input dataset will be returned without modification.
-           Currently supported: 'tisr', 'ttr', 'ttrc', 'tsr', 'tsrc', 'cp', 'lsp'
+           Currently supported: 'tisr', 'ttr', 'ttrc', 'tsr', 'tsrc', 'ssr', 'ssrc', 'ssrd', 'str', 'strc', 'strd', 'cp', 'lsp', 'tp', 'e', 'ro', 'sf', 'slhf', 'sshf'
 
 
     Returns
@@ -321,7 +321,7 @@ def accumulated_to_instantaneous(data_set, vname):
         Dataset with converted units of the supplied variable
     """
     
-    accumulated_fields = ['tisr', 'ttr', 'ttrc', 'tsr', 'tsrc', 'cp', 'lsp']
+    accumulated_fields = ['tisr', 'ttr', 'ttrc', 'tsr', 'tsrc', 'ssr', 'ssrc', 'ssrd', 'str', 'strc', 'strd', 'cp', 'lsp', 'tp', 'e', 'ro', 'sf', 'slhf', 'sshf']
     conversion_dictionary = {'J m-2': 'W m-2', 'm': 'mm/day'}
     
     if vname in accumulated_fields:
@@ -334,18 +334,20 @@ def accumulated_to_instantaneous(data_set, vname):
             return data_set # unmodified
         
         # Examine interval operation value and units        
+        assert data_set[vname].online_operation == 'average', 'Code assumes that these are averaged and not accumulated fields. Instant fields are ok if operation interval is output interval'
         acc_value, acc_unit = extract_number_and_units(data_set[vname].interval_operation, pattern=r'(\d+)\s*([a-zA-Z]+)')
-        if acc_unit == 'h':
-            if units == 'J m-2': # Convert J to Watt by dividing by the number of seconds in accumulation period
-                seconds_in_accumulation_period = acc_value * 60 * 60
-                data_set[vname] = data_set[vname] / seconds_in_accumulation_period
-            if units == 'm': # Convert m to mm/day by multiplying by number of accumulation periods per day and 1000
-                acc_periods_in_day = 24.0 / acc_value
-                data_set[vname] = data_set[vname] * acc_periods_in_day * 1000
-            data_set[vname].attrs['units'] = new_units
-            return data_set # modified
-        else:
-            return data_set # unmodified
+        with xr.set_options(keep_attrs=True):
+            if acc_unit == 'h':
+                if units == 'J m-2': # Convert J to Watt by dividing by the number of seconds in accumulation period
+                    seconds_in_accumulation_period = acc_value * 60 * 60
+                    data_set[vname] = data_set[vname] / seconds_in_accumulation_period
+                if units == 'm': # Convert m to mm/day by multiplying by number of accumulation periods per day and 1000
+                    acc_periods_in_day = 24.0 / acc_value
+                    data_set[vname] = data_set[vname] * acc_periods_in_day * 1000
+                data_set[vname].attrs['units'] = new_units
+                return data_set # modified
+            else:
+                return data_set # unmodified
     else:
         return data_set # unmodified
 
