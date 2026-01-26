@@ -334,7 +334,7 @@ def accumulated_to_instantaneous(data_set, vname):
             return data_set # unmodified
         
         # Examine interval operation value and units        
-        assert data_set[vname].online_operation == 'average', 'Code assumes that these are averaged and not accumulated fields. Instant fields are ok if operation interval is output interval'
+        assert (data_set[vname].online_operation == 'average') or (data_set[vname].online_operation == 'instant' and data_set[vname].interval_operation == data_set[vname].interval_write), 'This is an OIFS accumulated field. The code for unit conversion here assumes that for such fields, XIOS averaged them and did not accumulated them. I.e it assumes that the accumulation period (relevant for unit conversion) is the OIFS operation interval. XIOS instant fields are also ok. Currently for safety it is checked whether in this case the operation interval is the output interval. Otherwise you are throwing away data.'
         acc_value, acc_unit = extract_number_and_units(data_set[vname].interval_operation, pattern=r'(\d+)\s*([a-zA-Z]+)')
         with xr.set_options(keep_attrs=True):
             if acc_unit == 'h':
