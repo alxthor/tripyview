@@ -58,6 +58,7 @@ def get_filepaths(data_path, file_names):
 def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=None, height=None, heightidx=None,
               do_tarithm='mean', do_zarithm='mean', descript='', do_compute=False, do_load=True, do_persist=False,
               file_names=None, do_zweight=False, do_hweight=True,
+              prefix='atm_remapped',
               drop_vars=['time_centered_bounds', 'time_counter_bounds', 'time_counter_bnds'],
               chunks={'time_counter': 'auto', 'lon': 'auto', 'lat': 'auto'}, **kwargs):
     """
@@ -76,7 +77,7 @@ def open_data(data_path, vname, data_freq, years, mon=None, day=None, record=Non
     str_lheight, str_ltim = '', '' # string for labels    
     
     # Open data
-    if file_names is None: file_names, str_ltim = get_filenames(vname, data_freq, years)
+    if file_names is None: file_names, str_ltim = get_filenames(vname, data_freq, years, prefix=prefix)
     else:
         # Do not change file_names but determine str_ltim
         if isinstance(years, (list, np.ndarray, range)):
